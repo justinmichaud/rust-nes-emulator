@@ -1,0 +1,6 @@
+[package]
+name = "nes_emulator"
+version = "0.1.0"
+authors = ["Justin Michaud <justin@justinmichaud.com>"]
+
+[dependencies]
