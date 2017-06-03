@@ -1,5 +1,6 @@
 use mem::*;
 
+#[derive(Debug)]
 pub struct Cpu {
     a: u8,
     x: u8,
@@ -9,8 +10,9 @@ pub struct Cpu {
     sign: bool,
     overflow: bool,
     interrupt: bool,
-    carry: bool,
-    zero: bool
+    irq_disable: bool,
+    zero: bool,
+    carry: bool
 }
 
 impl Cpu {
@@ -21,15 +23,21 @@ impl Cpu {
             y: 0,
             s: 0xFD,
             pc: mem.read16(0xFFFC),
-            sign: false,
-            overflow: false,
-            interrupt: false,
+            sign: true,
+            overflow: true,
+            interrupt: true,
+            irq_disable: false,
             carry: false,
             zero: false
         }
     }
 
     pub fn tick(&mut self, mem: &mut Mem) {
-        println!("Cpu Cycle: PC: {:X}", self.pc);
+        println!("State: {:?}", self);
+
+        let op = mem.read(self.pc);
+        println!("Got op {:X}", op);
+
+
     }
 }
