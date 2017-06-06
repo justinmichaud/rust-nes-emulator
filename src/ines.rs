@@ -16,7 +16,7 @@ pub struct Flags {
 }
 
 pub fn load_file() -> Result<(Flags, Vec<u8>, Vec<u8>)> {
-    let file = File::open("tests/c_playground/lesson1.nes")?;
+    let file = File::open("tests/cpu_testing/test.nes")?;
     let mut buf_reader = BufReader::new(file);
     let mut contents = vec![];
     buf_reader.read_to_end(&mut contents)?;

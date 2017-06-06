@@ -4,3 +4,5 @@ version = "0.1.0"
 authors = ["Justin Michaud <justin@justinmichaud.com>"]
 
 [dependencies]
+phf = "0.7.21"
+phf_macros = "0.7.21"

@@ -1,5 +1,14 @@
 #![feature(inclusive_range_syntax)]
 #![feature(inclusive_range)]
+#![feature(plugin)]
+
+// Temporary -------------------------
+#![allow(dead_code)]
+#![allow(unused_variables)]
+// -------------------------------------
+
+#![plugin(phf_macros)]
+extern crate phf;
 
 mod cpu;
 mod ines;
