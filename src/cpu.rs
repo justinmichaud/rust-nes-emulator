@@ -132,6 +132,16 @@ const OPCODES: Map<u8, (ALUOperation, AddressMode)> = phf_map!{
     0xD9u8 => (cmp, absolute_y),
     0xC1u8 => (cmp, indirect_x),
     0xD1u8 => (cmp, indirect_y),
+
+    // CPX
+    0xE0u8 => (cpx, immediate),
+    0xE4u8 => (cpx, zero_page),
+    0xECu8 => (cpx, absolute),
+
+    // CPY
+    0xC0u8 => (cpy, immediate),
+    0xC4u8 => (cpy, zero_page),
+    0xCCu8 => (cpy, absolute),
 };
 
 #[derive(Debug)]
@@ -339,6 +349,26 @@ fn cmp(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
     let a = cpu.a;
     let overflow = cpu.overflow;
     cpu.carry = true;
+    sbc(cpu, mem, mode);
+    cpu.a = a;
+    cpu.overflow = overflow;
+}
+
+fn cpx(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+    let a = cpu.a;
+    let overflow = cpu.overflow;
+    cpu.carry = true;
+    cpu.a = cpu.x;
+    sbc(cpu, mem, mode);
+    cpu.a = a;
+    cpu.overflow = overflow;
+}
+
+fn cpy(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+    let a = cpu.a;
+    let overflow = cpu.overflow;
+    cpu.carry = true;
+    cpu.a = cpu.y;
     sbc(cpu, mem, mode);
     cpu.a = a;
     cpu.overflow = overflow;
@@ -644,6 +674,21 @@ mod tests {
         assert_eq!(cpu.carry, true);
         assert_eq!(cpu.overflow, false);
         assert_eq!(cpu.zero, false);
+        assert_eq!(cpu.negative, false);
+        assert_eq!(cpu.count, 2);
+    }
+
+    #[test]
+    fn cpx_test_eq() {
+        let (mut cpu, mut mem) = make_cpu();
+
+        cpu.x = 1;
+        run_instr(cpx, 0x1, &mut cpu, &mut mem);
+        assert_eq!(cpu.a, 0);
+        assert_eq!(cpu.x, 1);
+        assert_eq!(cpu.carry, true);
+        assert_eq!(cpu.overflow, false);
+        assert_eq!(cpu.zero, true);
         assert_eq!(cpu.negative, false);
         assert_eq!(cpu.count, 2);
     }
