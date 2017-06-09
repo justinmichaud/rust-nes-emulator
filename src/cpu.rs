@@ -37,6 +37,7 @@ type AddressMode = fn(&mut Cpu, &Mem, bool) -> AddressModeResult;
 type ALUOperation = fn(&mut Cpu, &mut Mem, AddressMode) -> ();
 
 const OPCODES: Map<u8, (ALUOperation, AddressMode)> = phf_map!{
+    // ADC
     0x69u8 => (adc, immediate),
     0x65u8 => (adc, zero_page),
     0x75u8 => (adc, zero_page_x),
@@ -45,6 +46,16 @@ const OPCODES: Map<u8, (ALUOperation, AddressMode)> = phf_map!{
     0x79u8 => (adc, absolute_y),
     0x61u8 => (adc, indirect_x),
     0x71u8 => (adc, indirect_y),
+
+    // SBC
+    0xE9u8 => (sbc, immediate),
+    0xE5u8 => (sbc, zero_page),
+    0xF5u8 => (sbc, zero_page_x),
+    0xEDu8 => (sbc, absolute),
+    0xFDu8 => (sbc, absolute_x),
+    0xF9u8 => (sbc, absolute_y),
+    0xE1u8 => (sbc, indirect_x),
+    0xF1u8 => (sbc, indirect_y),
 };
 
 #[derive(Debug)]
@@ -140,6 +151,10 @@ fn indirect_y(cpu: &mut Cpu, mem: &Mem, page_matters: bool) -> AddressModeResult
 
 fn adc(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
     let val = mode(cpu, mem, true).read(mem);
+    add_with_carry(cpu, val);
+}
+
+fn add_with_carry(cpu: &mut Cpu, val: u8) {
     let res = val as u16 + cpu.a as u16 + if cpu.carry { 1 } else { 0 };
     let res_signed = (val as i8) as i16 + (cpu.a as i8) as i16 + if cpu.carry { 1 } else { 0 };
 
@@ -149,6 +164,12 @@ fn adc(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
 
     cpu.zero = cpu.a == 0;
     cpu.negative = cpu.a&0b10000000 > 0;
+}
+
+fn sbc(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+    let val = mode(cpu, mem, true).read(mem);
+    add_with_carry(cpu, (-(val as i8)) as u8);
+    println!("-{} is {}", val, (-(val as i8)) as u8);
 }
 
 fn manual(cpu: &mut Cpu, mem: &mut Mem, op: u8) {
@@ -271,6 +292,34 @@ mod tests {
         assert_eq!(cpu.overflow, false);
         assert_eq!(cpu.zero, false);
         assert_eq!(cpu.negative, false);
+        assert_eq!(cpu.count, 2);
+    }
+
+    #[test]
+    fn sbc_test_regular() {
+        let (mut cpu, mut mem) = make_cpu();
+
+        cpu.a = 1;
+        run_instr(sbc, 1, &mut cpu, &mut mem);
+        assert_eq!(cpu.a, 0);
+        assert_eq!(cpu.carry, true);
+        assert_eq!(cpu.overflow, false);
+        assert_eq!(cpu.zero, true);
+        assert_eq!(cpu.negative, false);
+        assert_eq!(cpu.count, 2);
+    }
+
+    #[test]
+    fn sbc_test_negative() {
+        let (mut cpu, mut mem) = make_cpu();
+
+        cpu.a = 1;
+        run_instr(sbc, 2, &mut cpu, &mut mem);
+        assert_eq!(cpu.a, 0xFF);
+        assert_eq!(cpu.carry, false);
+        assert_eq!(cpu.overflow, false);
+        assert_eq!(cpu.zero, false);
+        assert_eq!(cpu.negative, true);
         assert_eq!(cpu.count, 2);
     }
 
