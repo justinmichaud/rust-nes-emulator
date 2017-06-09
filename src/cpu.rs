@@ -5,7 +5,9 @@ use std::fmt;
 enum AddressModeResult {
     Val(u8),
     Addr(u16),
-    Accumulator
+    Accumulator,
+    X,
+    Y,
 }
 use self::AddressModeResult::*;
 
@@ -14,7 +16,9 @@ impl fmt::Debug for AddressModeResult {
         match *self {
             Val(val) => write!(f, "Value ({:X})", val),
             Addr(addr) => write!(f, "Address ({:X})", addr),
-            Accumulator => write!(f, "Cpu.a")
+            Accumulator => write!(f, "Cpu.a"),
+            X => write!(f, "Cpu.x"),
+            Y => write!(f, "Cpu.y"),
         }
     }
 }
@@ -24,7 +28,9 @@ impl AddressModeResult {
         match *self {
             Val(val) => val,
             Addr(addr) => mem.read(addr),
-            Accumulator => cpu.a
+            Accumulator => cpu.a,
+            X => cpu.x,
+            Y => cpu.y,
         }
     }
 
@@ -32,6 +38,8 @@ impl AddressModeResult {
         match *self {
             Addr(addr) => mem.write(addr, val),
             Accumulator => cpu.a = val,
+            X => cpu.x = val,
+            Y => cpu.y = val,
             _ => panic!("Attempt to write to a read-only AddressModeResult: {:?}", self)
         }
     }
@@ -142,6 +150,27 @@ const OPCODES: Map<u8, (ALUOperation, AddressMode)> = phf_map!{
     0xC0u8 => (cpy, immediate),
     0xC4u8 => (cpy, zero_page),
     0xCCu8 => (cpy, absolute),
+
+    // INC
+    0xE6u8 => (inc, zero_page),
+    0xF6u8 => (inc, zero_page_x),
+    0xEEu8 => (inc, absolute),
+    0xFEu8 => (inc, absolute_x),
+
+    // DEC
+    0xC6u8 => (dec, zero_page),
+    0xD6u8 => (dec, zero_page_x),
+    0xCEu8 => (dec, absolute),
+    0xDEu8 => (dec, absolute_x),
+
+    // INX
+    0xE8u8 => (inc, implied_x),
+    // INY
+    0xC8u8 => (inc, implied_y),
+    // DEX
+    0xCAu8 => (dec, implied_x),
+    // DEY
+    0x88u8 => (dec, implied_y),
 };
 
 #[derive(Debug)]
@@ -237,6 +266,14 @@ fn indirect_y(cpu: &mut Cpu, mem: &Mem, page_matters: bool) -> AddressModeResult
 
 fn implied_a(cpu: &mut Cpu, mem: &Mem, page_matters: bool) -> AddressModeResult {
     Accumulator
+}
+
+fn implied_x(cpu: &mut Cpu, mem: &Mem, page_matters: bool) -> AddressModeResult {
+    X
+}
+
+fn implied_y(cpu: &mut Cpu, mem: &Mem, page_matters: bool) -> AddressModeResult {
+    Y
 }
 
 fn adc(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
@@ -374,8 +411,33 @@ fn cpy(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
     cpu.overflow = overflow;
 }
 
+fn inc(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+    let r = mode(cpu, mem, false);
+    let val = r.read(cpu, mem);
+    cpu.count = cpu.count + 2;
+
+    let result = ((val as u16 + 1)&0xFF) as u8;
+    r.write(cpu, mem, result);
+
+    cpu.zero = result == 0;
+    cpu.negative = result&0b10000000 > 0;
+}
+
+fn dec(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+    let r = mode(cpu, mem, false);
+    let val = r.read(cpu, mem);
+    cpu.count = cpu.count + 2;
+
+    let result = ((val as u16 - 1)&0xFF) as u8;
+    r.write(cpu, mem, result);
+
+    cpu.zero = result == 0;
+    cpu.negative = result&0b10000000 > 0;
+}
+
 fn manual(cpu: &mut Cpu, mem: &mut Mem, op: u8) {
     println!("Manual {:X}", op);
+    panic!("Not implemented yet!");
 }
 
 impl Cpu {
@@ -687,6 +749,22 @@ mod tests {
         assert_eq!(cpu.a, 0);
         assert_eq!(cpu.x, 1);
         assert_eq!(cpu.carry, true);
+        assert_eq!(cpu.overflow, false);
+        assert_eq!(cpu.zero, true);
+        assert_eq!(cpu.negative, false);
+        assert_eq!(cpu.count, 2);
+    }
+
+    #[test]
+    fn inx_test_regular() {
+        let (mut cpu, mut mem) = make_cpu();
+
+        cpu.a = 0;
+        cpu.x = 0xFF;
+        inc(&mut cpu, &mut mem, implied_x);
+        assert_eq!(cpu.a, 0);
+        assert_eq!(cpu.x, 0);
+        assert_eq!(cpu.carry, false);
         assert_eq!(cpu.overflow, false);
         assert_eq!(cpu.zero, true);
         assert_eq!(cpu.negative, false);
