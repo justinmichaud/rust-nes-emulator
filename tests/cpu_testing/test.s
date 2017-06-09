@@ -19,6 +19,7 @@
 
 start:
 	adc test_var
+	adc #255
 	jmp start
 
 nmi:
@@ -27,7 +28,7 @@ irq:
 
 .segment "RODATA"
 
-test_var: .word $BEEF
+test_var: .byte 129
 
 .segment "VECTORS"
 

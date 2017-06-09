@@ -72,7 +72,7 @@ impl Mem {
     }
 
     fn mapper_ref(&self, addr: u16) -> MemoryRef {
-        assert!(self.prg_ram.len() == 8*1024, "PRG ram must not be mirrored (yet)");
+        assert!(self.prg_ram.len() == 8*1024, "PRG ram must be 8kB (for now)");
         assert!(self.prg.len() == 16*1024 || self.prg.len() == 32*1024, "PRG ram must be 16 or 32kb");
 
         match addr as usize {

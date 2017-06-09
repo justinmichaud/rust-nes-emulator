@@ -54,7 +54,7 @@ pub struct Cpu {
     y: u8,
     s: u8,
     pc: u16,
-    sign: bool,
+    negative: bool,
     overflow: bool,
     interrupt: bool,
     irq_disable: bool,
@@ -139,8 +139,16 @@ fn indirect_y(cpu: &mut Cpu, mem: &Mem, page_matters: bool) -> AddressModeResult
 }
 
 fn adc(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
-    let addr = mode(cpu, mem, true);
-    println!("{:?} => {:X}", addr, addr.read(mem));
+    let val = mode(cpu, mem, true).read(mem);
+    let res = val as u16 + cpu.a as u16 + if cpu.carry { 1 } else { 0 };
+    let res_signed = (val as i8) as i16 + (cpu.a as i8) as i16 + if cpu.carry { 1 } else { 0 };
+
+    cpu.carry = res > 0xFF;
+    cpu.overflow = res_signed > 127 || res_signed < -128;
+    cpu.a = (res&0xFF) as u8;
+
+    cpu.zero = cpu.a == 0;
+    cpu.negative = cpu.a&0b10000000 > 0;
 }
 
 fn manual(cpu: &mut Cpu, mem: &mut Mem, op: u8) {
@@ -148,14 +156,14 @@ fn manual(cpu: &mut Cpu, mem: &mut Mem, op: u8) {
 }
 
 impl Cpu {
-    pub fn new(mem: &Mem) -> Cpu {
+    pub fn new(pc: u16) -> Cpu {
         Cpu {
             a: 0,
             x: 0,
             y: 0,
             s: 0xFD,
-            pc: mem.read16(0xFFFC),
-            sign: true,
+            pc: pc,
+            negative: true,
             overflow: true,
             interrupt: true,
             irq_disable: false,
@@ -166,14 +174,104 @@ impl Cpu {
     }
 
     pub fn tick(&mut self, mem: &mut Mem) {
-        println!("State: {:?}", self);
+        println!("State before: {:?}", self);
 
         let op = mem.read(self.pc);
         self.pc += 1;
 
         match OPCODES.get(&op) {
-            Some(&(alu, mode)) => alu(self, mem, mode),
+            Some(&(alu, mode)) => {
+                println!("{:04X}: {:0X}", self.pc-1, op);
+                alu(self, mem, mode)
+            },
             _ => manual(self, mem, op)
         }
+
+        println!("State after: {:?}", self);
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_cpu() -> (Cpu, Mem) {
+        (Cpu::new(0), Mem::new(vec![], vec![], 0))
+    }
+
+    fn run_instr(instr: ALUOperation, arg: u8, cpu: &mut Cpu, mem: &mut Mem) {
+        cpu.pc = 0;
+        mem.write(0, arg);
+        instr(cpu, mem, immediate);
+    }
+
+    #[test]
+    fn adc_test_regular() {
+        let (mut cpu, mut mem) = make_cpu();
+
+        cpu.a = 1;
+        run_instr(adc, 1, &mut cpu, &mut mem);
+        assert_eq!(cpu.a, 2);
+        assert_eq!(cpu.carry, false);
+        assert_eq!(cpu.overflow, false);
+        assert_eq!(cpu.zero, false);
+        assert_eq!(cpu.negative, false);
+        assert_eq!(cpu.count, 2);
+    }
+
+    // See http://www.6502.org/tutorials/vflag.html
+    #[test]
+    fn adc_test_carry() {
+        let (mut cpu, mut mem) = make_cpu();
+
+        cpu.a = 0x01;
+        run_instr(adc, 0xFF, &mut cpu, &mut mem);
+        assert_eq!(cpu.a, 0);
+        assert_eq!(cpu.carry, true);
+        assert_eq!(cpu.overflow, false);
+        assert_eq!(cpu.zero, true);
+        assert_eq!(cpu.negative, false);
+    }
+
+    #[test]
+    fn adc_test_overflow() {
+        let (mut cpu, mut mem) = make_cpu();
+
+        cpu.a = 0x7f;
+        run_instr(adc, 0x01, &mut cpu, &mut mem);
+        assert_eq!(cpu.a, 0x80);
+        assert_eq!(cpu.carry, false);
+        assert_eq!(cpu.overflow, true);
+        assert_eq!(cpu.zero, false);
+        assert_eq!(cpu.negative, true);
+    }
+
+    #[test]
+    fn adc_test_overflow_and_carry() {
+        let (mut cpu, mut mem) = make_cpu();
+
+        cpu.a = 0x80;
+        run_instr(adc, 0xFF, &mut cpu, &mut mem);
+        assert_eq!(cpu.a, 0x7F);
+        assert_eq!(cpu.carry, true);
+        assert_eq!(cpu.overflow, true);
+        assert_eq!(cpu.zero, false);
+        assert_eq!(cpu.negative, false);
+    }
+
+    #[test]
+    fn adc_test_with_carry() {
+        let (mut cpu, mut mem) = make_cpu();
+
+        cpu.carry = true;
+        cpu.a = 1;
+        run_instr(adc, 1, &mut cpu, &mut mem);
+        assert_eq!(cpu.a, 3);
+        assert_eq!(cpu.carry, false);
+        assert_eq!(cpu.overflow, false);
+        assert_eq!(cpu.zero, false);
+        assert_eq!(cpu.negative, false);
+        assert_eq!(cpu.count, 2);
+    }
+
 }

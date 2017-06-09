@@ -13,7 +13,7 @@ impl Nes {
         let mem = Mem::new(prg, chr, prg_ram_size);
 
         Nes {
-            cpu: Cpu::new(&mem),
+            cpu: Cpu::new(mem.read16(0xFFFC)),
             mem: mem
         }
     }
