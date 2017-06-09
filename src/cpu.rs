@@ -4,7 +4,8 @@ use std::fmt;
 
 enum AddressModeResult {
     Val(u8),
-    Addr(u16)
+    Addr(u16),
+    Accumulator
 }
 use self::AddressModeResult::*;
 
@@ -12,22 +13,25 @@ impl fmt::Debug for AddressModeResult {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Val(val) => write!(f, "Value ({:X})", val),
-            Addr(addr) => write!(f, "Address ({:X})", addr)
+            Addr(addr) => write!(f, "Address ({:X})", addr),
+            Accumulator => write!(f, "Cpu.a")
         }
     }
 }
 
 impl AddressModeResult {
-    fn read(&self, mem: &Mem) -> u8 {
+    fn read(&self, cpu: &Cpu, mem: &Mem) -> u8 {
         match *self {
             Val(val) => val,
-            Addr(addr) => mem.read(addr)
+            Addr(addr) => mem.read(addr),
+            Accumulator => cpu.a
         }
     }
 
-    fn write(&self, mem: &mut Mem, val: u8) {
+    fn write(&self, cpu: &mut Cpu, mem: &mut Mem, val: u8) {
         match *self {
             Addr(addr) => mem.write(addr, val),
+            Accumulator => cpu.a = val,
             _ => panic!("Attempt to write to a read-only AddressModeResult: {:?}", self)
         }
     }
@@ -56,6 +60,64 @@ const OPCODES: Map<u8, (ALUOperation, AddressMode)> = phf_map!{
     0xF9u8 => (sbc, absolute_y),
     0xE1u8 => (sbc, indirect_x),
     0xF1u8 => (sbc, indirect_y),
+
+    //AND
+    0x29u8 => (and, immediate),
+    0x25u8 => (and, zero_page),
+    0x35u8 => (and, zero_page_x),
+    0x2Du8 => (and, absolute),
+    0x3Du8 => (and, absolute_x),
+    0x39u8 => (and, absolute_y),
+    0x21u8 => (and, indirect_x),
+    0x31u8 => (and, indirect_y),
+
+    //ORA
+    0x09u8 => (ora, immediate),
+    0x05u8 => (ora, zero_page),
+    0x15u8 => (ora, zero_page_x),
+    0x0Du8 => (ora, absolute),
+    0x1Du8 => (ora, absolute_x),
+    0x19u8 => (ora, absolute_y),
+    0x01u8 => (ora, indirect_x),
+    0x11u8 => (ora, indirect_y),
+
+    //EOR (XOR)
+    0x49u8 => (eor, immediate),
+    0x45u8 => (eor, zero_page),
+    0x55u8 => (eor, zero_page_x),
+    0x4Du8 => (eor, absolute),
+    0x5Du8 => (eor, absolute_x),
+    0x59u8 => (eor, absolute_y),
+    0x41u8 => (eor, indirect_x),
+    0x51u8 => (eor, indirect_y),
+
+    //ASL
+    0x0Au8 => (asl, implied_a),
+    0x06u8 => (asl, zero_page),
+    0x16u8 => (asl, zero_page_x),
+    0x0Eu8 => (asl, absolute),
+    0x1Eu8 => (asl, absolute_x),
+
+    //LSR
+    0x4Au8 => (lsr, implied_a),
+    0x46u8 => (lsr, zero_page),
+    0x56u8 => (lsr, zero_page_x),
+    0x4Eu8 => (lsr, absolute),
+    0x5Eu8 => (lsr, absolute_x),
+
+    //ROL
+    0x2Au8 => (rol, implied_a),
+    0x26u8 => (rol, zero_page),
+    0x36u8 => (rol, zero_page_x),
+    0x2Eu8 => (rol, absolute),
+    0x3Eu8 => (rol, absolute_x),
+
+    //ROR
+    0x6Au8 => (ror, implied_a),
+    0x66u8 => (ror, zero_page),
+    0x76u8 => (ror, zero_page_x),
+    0x6Eu8 => (ror, absolute),
+    0x7Eu8 => (ror, absolute_x),
 };
 
 #[derive(Debug)]
@@ -111,7 +173,7 @@ fn absolute_x(cpu: &mut Cpu, mem: &Mem, page_matters: bool) -> AddressModeResult
     let arg = mem.read16(cpu.pc);
     cpu.pc += 1;
     cpu.count += 4;
-    if page_matters && (arg as u16 + cpu.x as u16)/256u16 != arg as u16 / 256u16 {
+    if !page_matters || (arg as u16 + cpu.x as u16)/256u16 != arg as u16 / 256u16 {
         cpu.count += 1;
     }
     Addr(arg + cpu.x as u16)
@@ -121,7 +183,7 @@ fn absolute_y(cpu: &mut Cpu, mem: &Mem, page_matters: bool) -> AddressModeResult
     let arg = mem.read16(cpu.pc);
     cpu.pc += 1;
     cpu.count += 4;
-    if page_matters && (arg as u16 + cpu.y as u16)/256u16 != arg as u16/256u16 {
+    if !page_matters || (arg as u16 + cpu.y as u16)/256u16 != arg as u16/256u16 {
         cpu.count += 1;
     }
     Addr(arg + cpu.y as u16)
@@ -142,15 +204,19 @@ fn indirect_y(cpu: &mut Cpu, mem: &Mem, page_matters: bool) -> AddressModeResult
 
     let base = mem.read(arg as u16 % 256) as u16 + (mem.read((arg as u16 + 1) % 256) as u16)*256;
 
-    if page_matters && (base + cpu.y as u16)/256u16 != base/256u16 {
+    if !page_matters || (base + cpu.y as u16)/256u16 != base/256u16 {
         cpu.count += 1;
     }
 
     Addr(base + cpu.y as u16)
 }
 
+fn implied_a(cpu: &mut Cpu, mem: &Mem, page_matters: bool) -> AddressModeResult {
+    Accumulator
+}
+
 fn adc(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
-    let val = mode(cpu, mem, true).read(mem);
+    let val = mode(cpu, mem, true).read(cpu, mem);
     add_with_carry(cpu, val);
 }
 
@@ -167,9 +233,83 @@ fn add_with_carry(cpu: &mut Cpu, val: u8) {
 }
 
 fn sbc(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
-    let val = mode(cpu, mem, true).read(mem);
+    let val = mode(cpu, mem, true).read(cpu, mem);
     add_with_carry(cpu, (-(val as i8)) as u8);
-    println!("-{} is {}", val, (-(val as i8)) as u8);
+}
+
+fn and(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+    let val = mode(cpu, mem, true).read(cpu, mem);
+    cpu.a = cpu.a&val;
+    cpu.zero = cpu.a == 0;
+    cpu.negative = cpu.a&0b10000000 > 0;
+}
+
+fn ora(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+    let val = mode(cpu, mem, true).read(cpu, mem);
+    cpu.a = cpu.a|val;
+    cpu.zero = cpu.a == 0;
+    cpu.negative = cpu.a&0b10000000 > 0;
+}
+
+fn eor(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+    let val = mode(cpu, mem, true).read(cpu, mem);
+    cpu.a = cpu.a^val;
+    cpu.zero = cpu.a == 0;
+    cpu.negative = cpu.a&0b10000000 > 0;
+}
+
+fn asl(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+    let r = mode(cpu, mem, false);
+    let val = r.read(cpu, mem);
+    cpu.count = cpu.count + 2;
+
+    cpu.carry = val&0b10000000 > 0;
+    let result = val << 1;
+    r.write(cpu, mem, result);
+
+    cpu.zero = result == 0;
+    cpu.negative = result&0b10000000 > 0;
+}
+
+fn lsr(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+    let r = mode(cpu, mem, false);
+    let val = r.read(cpu, mem);
+    cpu.count = cpu.count + 2;
+
+    cpu.carry = val&0b00000001 > 0;
+    let result = (val >> 1) & 0b011111111;
+    r.write(cpu, mem, result);
+
+    cpu.zero = result == 0;
+    cpu.negative = result&0b10000000 > 0;
+}
+
+fn rol(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+    let r = mode(cpu, mem, false);
+    let val = r.read(cpu, mem);
+    cpu.count = cpu.count + 2;
+
+    let old_carry = if cpu.carry { 1 } else { 0 };
+    cpu.carry = val&0b10000000 > 0;
+    let result = (val << 1) | old_carry;
+    r.write(cpu, mem, result);
+
+    cpu.zero = result == 0;
+    cpu.negative = result&0b10000000 > 0;
+}
+
+fn ror(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+    let r = mode(cpu, mem, false);
+    let val = r.read(cpu, mem);
+    cpu.count = cpu.count + 2;
+
+    let old_carry = if cpu.carry { 1 } else { 0 };
+    cpu.carry = val&0b00000001 > 0;
+    let result = (val >> 1) | old_carry<<7;
+    r.write(cpu, mem, result);
+
+    cpu.zero = result == 0;
+    cpu.negative = result&0b10000000 > 0;
 }
 
 fn manual(cpu: &mut Cpu, mem: &mut Mem, op: u8) {
@@ -185,8 +325,8 @@ impl Cpu {
             s: 0xFD,
             pc: pc,
             negative: true,
-            overflow: true,
-            interrupt: true,
+            overflow: false,
+            interrupt: true, // Only exists in copies pushed to the stack
             irq_disable: false,
             carry: false,
             zero: false,
@@ -217,7 +357,16 @@ mod tests {
     use super::*;
 
     fn make_cpu() -> (Cpu, Mem) {
-        (Cpu::new(0), Mem::new(vec![], vec![], 0))
+        let mut cpu = Cpu::new(0);
+        let mem = Mem::new(vec![], vec![], 0);
+
+        cpu.a = 0;
+        cpu.negative = false;
+        cpu.overflow = false;
+        cpu.carry = false;
+        cpu.zero = true;
+
+        (cpu, mem)
     }
 
     fn run_instr(instr: ALUOperation, arg: u8, cpu: &mut Cpu, mem: &mut Mem) {
@@ -323,4 +472,103 @@ mod tests {
         assert_eq!(cpu.count, 2);
     }
 
+    #[test]
+    fn and_test_regular() {
+        let (mut cpu, mut mem) = make_cpu();
+
+        cpu.a = 1;
+        run_instr(and, 0xFF, &mut cpu, &mut mem);
+        assert_eq!(cpu.a, 1);
+        assert_eq!(cpu.carry, false);
+        assert_eq!(cpu.overflow, false);
+        assert_eq!(cpu.zero, false);
+        assert_eq!(cpu.negative, false);
+        assert_eq!(cpu.count, 2);
+    }
+
+    #[test]
+    fn ora_test_regular() {
+        let (mut cpu, mut mem) = make_cpu();
+
+        cpu.a = 1;
+        run_instr(ora, 0b10000000, &mut cpu, &mut mem);
+        assert_eq!(cpu.a, 0b10000001);
+        assert_eq!(cpu.carry, false);
+        assert_eq!(cpu.overflow, false);
+        assert_eq!(cpu.zero, false);
+        assert_eq!(cpu.negative, true);
+        assert_eq!(cpu.count, 2);
+    }
+
+    #[test]
+    fn eor_test_regular() {
+        let (mut cpu, mut mem) = make_cpu();
+
+        cpu.a = 1;
+        run_instr(eor, 0b10000001, &mut cpu, &mut mem);
+        assert_eq!(cpu.a, 0b10000000);
+        assert_eq!(cpu.carry, false);
+        assert_eq!(cpu.overflow, false);
+        assert_eq!(cpu.zero, false);
+        assert_eq!(cpu.negative, true);
+        assert_eq!(cpu.count, 2);
+    }
+
+    #[test]
+    fn asl_test_regular() {
+        let (mut cpu, mut mem) = make_cpu();
+
+        cpu.a = 0b10000001;
+        asl(&mut cpu, &mut mem, implied_a);
+        assert_eq!(cpu.a, 0b00000010);
+        assert_eq!(cpu.carry, true);
+        assert_eq!(cpu.overflow, false);
+        assert_eq!(cpu.zero, false);
+        assert_eq!(cpu.negative, false);
+        assert_eq!(cpu.count, 2);
+    }
+
+    #[test]
+    fn lsr_test_regular() {
+        let (mut cpu, mut mem) = make_cpu();
+
+        cpu.a = 0b10000001;
+        lsr(&mut cpu, &mut mem, implied_a);
+        assert_eq!(cpu.a, 0b01000000);
+        assert_eq!(cpu.carry, true);
+        assert_eq!(cpu.overflow, false);
+        assert_eq!(cpu.zero, false);
+        assert_eq!(cpu.negative, false);
+        assert_eq!(cpu.count, 2);
+    }
+
+    #[test]
+    fn rol_test_regular() {
+        let (mut cpu, mut mem) = make_cpu();
+
+        cpu.a = 0b10010001;
+        cpu.carry = true;
+        rol(&mut cpu, &mut mem, implied_a);
+        assert_eq!(cpu.a, 0b00100011);
+        assert_eq!(cpu.carry, true);
+        assert_eq!(cpu.overflow, false);
+        assert_eq!(cpu.zero, false);
+        assert_eq!(cpu.negative, false);
+        assert_eq!(cpu.count, 2);
+    }
+
+    #[test]
+    fn ror_test_regular() {
+        let (mut cpu, mut mem) = make_cpu();
+
+        cpu.a = 0b10010001;
+        cpu.carry = true;
+        ror(&mut cpu, &mut mem, implied_a);
+        assert_eq!(cpu.a, 0b11001000);
+        assert_eq!(cpu.carry, true);
+        assert_eq!(cpu.overflow, false);
+        assert_eq!(cpu.zero, false);
+        assert_eq!(cpu.negative, true);
+        assert_eq!(cpu.count, 2);
+    }
 }
