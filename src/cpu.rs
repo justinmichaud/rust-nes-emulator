@@ -181,6 +181,30 @@ const OPCODES: Map<u8, (ALUOperation, AddressMode)> = phf_map!{
     0xB0u8 => (bcs, relative),
     0xD0u8 => (bne, relative),
     0xF0u8 => (beq, relative),
+
+    // LDA
+    0xA9u8 => (lda, immediate),
+    0xA5u8 => (lda, zero_page),
+    0xB5u8 => (lda, zero_page_x),
+    0xADu8 => (lda, absolute),
+    0xBDu8 => (lda, absolute_x),
+    0xB9u8 => (lda, absolute_y),
+    0xA1u8 => (lda, indirect_x),
+    0xB1u8 => (lda, indirect_y),
+
+    //LDX
+    0xA2u8 => (ldx, immediate),
+    0xA6u8 => (ldx, zero_page),
+    0xB6u8 => (ldx, zero_page_y),
+    0xAEu8 => (ldx, absolute),
+    0xBEu8 => (ldx, absolute_y),
+
+    //LDY
+    0xA0u8 => (ldy, immediate),
+    0xA4u8 => (ldy, zero_page),
+    0xB4u8 => (ldy, zero_page_x),
+    0xACu8 => (ldy, absolute),
+    0xBCu8 => (ldy, absolute_x),
 };
 
 #[derive(Debug)]
@@ -512,6 +536,27 @@ fn beq(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
     jump(cpu, mem, mode, cond);
 }
 
+fn lda(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+    let val = mode(cpu, mem, true).read(cpu, mem);
+    cpu.a = val;
+    cpu.zero = cpu.a == 0;
+    cpu.negative = cpu.a&0b10000000 > 0;
+}
+
+fn ldx(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+    let val = mode(cpu, mem, true).read(cpu, mem);
+    cpu.x = val;
+    cpu.zero = cpu.x == 0;
+    cpu.negative = cpu.x&0b10000000 > 0;
+}
+
+fn ldy(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+    let val = mode(cpu, mem, true).read(cpu, mem);
+    cpu.y = val;
+    cpu.zero = cpu.y == 0;
+    cpu.negative = cpu.y&0b10000000 > 0;
+}
+
 fn manual(cpu: &mut Cpu, mem: &mut Mem, op: u8) {
     println!("Manual {:X}", op);
 
@@ -522,6 +567,7 @@ fn manual(cpu: &mut Cpu, mem: &mut Mem, op: u8) {
         0x58 => cpu.irq_disable = false, //CLI
         0x78 => cpu.irq_disable = true, //SEI
         0xB8 => cpu.overflow = false, //CLV
+        0xEA => (), //NOP
         _ => panic!("Not implemented yet! Op: {}", op)
     }
 }
@@ -867,5 +913,19 @@ mod tests {
         beq(&mut cpu, &mut mem, relative);
         assert_eq!(cpu.pc, 10);
         assert_eq!(cpu.count, 3);
+    }
+
+    #[test]
+    fn lda_test() {
+        let (mut cpu, mut mem) = make_cpu();
+
+        cpu.a = 1;
+        run_instr(lda, 0x05, &mut cpu, &mut mem);
+        assert_eq!(cpu.a, 0x05);
+        assert_eq!(cpu.carry, false);
+        assert_eq!(cpu.overflow, false);
+        assert_eq!(cpu.zero, false);
+        assert_eq!(cpu.negative, false);
+        assert_eq!(cpu.count, 2);
     }
 }
