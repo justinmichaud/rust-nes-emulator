@@ -171,6 +171,16 @@ const OPCODES: Map<u8, (ALUOperation, AddressMode)> = phf_map!{
     0xCAu8 => (dec, implied_x),
     // DEY
     0x88u8 => (dec, implied_y),
+
+    // Branches
+    0x10u8 => (bpl, relative),
+    0x30u8 => (bmi, relative),
+    0x40u8 => (bvc, relative),
+    0x70u8 => (bvs, relative),
+    0x90u8 => (bcc, relative),
+    0xB0u8 => (bcs, relative),
+    0xD0u8 => (bne, relative),
+    0xF0u8 => (beq, relative),
 };
 
 #[derive(Debug)]
@@ -264,16 +274,26 @@ fn indirect_y(cpu: &mut Cpu, mem: &Mem, page_matters: bool) -> AddressModeResult
     Addr(base + cpu.y as u16)
 }
 
-fn implied_a(cpu: &mut Cpu, mem: &Mem, page_matters: bool) -> AddressModeResult {
+fn implied_a(cpu: &mut Cpu, mem: &Mem, _: bool) -> AddressModeResult {
     Accumulator
 }
 
-fn implied_x(cpu: &mut Cpu, mem: &Mem, page_matters: bool) -> AddressModeResult {
+fn implied_x(cpu: &mut Cpu, mem: &Mem, _: bool) -> AddressModeResult {
     X
 }
 
-fn implied_y(cpu: &mut Cpu, mem: &Mem, page_matters: bool) -> AddressModeResult {
+fn implied_y(cpu: &mut Cpu, mem: &Mem, _: bool) -> AddressModeResult {
     Y
+}
+
+fn relative(cpu: &mut Cpu, mem: &Mem, page_matters: bool) -> AddressModeResult {
+    let arg = mem.read(cpu.pc);
+    cpu.pc = cpu.pc + 1;
+    if !page_matters || (cpu.pc + 1)/256u16 != (cpu.pc + arg as u16)/256u16 {
+        cpu.count = cpu.count + 1;
+    }
+    cpu.count = cpu.count + 1;
+    Addr(cpu.pc + arg as u16)
 }
 
 fn adc(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
@@ -435,9 +455,75 @@ fn dec(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
     cpu.negative = result&0b10000000 > 0;
 }
 
+fn jump(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode, cond: bool) {
+    cpu.count += 2;
+    let count = cpu.count;
+    let val = match mode(cpu, mem, true) {
+        Addr(a) => a,
+        _ => panic!("Jump instruction address mode must produce an address result!")
+    };
+
+    if !cond {
+        // We read memory to advance the pc, but do not want to advance the count
+        cpu.count = count;
+        return;
+    }
+
+    cpu.pc = val;
+}
+
+fn bpl(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+    let cond = !cpu.negative;
+    jump(cpu, mem, mode, cond);
+}
+
+fn bmi(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+    let cond = cpu.negative;
+    jump(cpu, mem, mode, cond);
+}
+
+fn bvc(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+    let cond = !cpu.overflow;
+    jump(cpu, mem, mode, cond);
+}
+
+fn bvs(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+    let cond = cpu.overflow;
+    jump(cpu, mem, mode, cond);
+}
+
+fn bcc(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+    let cond = !cpu.carry;
+    jump(cpu, mem, mode, cond);
+}
+
+fn bcs(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+    let cond = cpu.carry;
+    jump(cpu, mem, mode, cond);
+}
+
+fn bne(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+    let cond = !cpu.zero;
+    jump(cpu, mem, mode, cond);
+}
+
+fn beq(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+    let cond = cpu.zero;
+    jump(cpu, mem, mode, cond);
+}
+
 fn manual(cpu: &mut Cpu, mem: &mut Mem, op: u8) {
     println!("Manual {:X}", op);
-    panic!("Not implemented yet!");
+
+    cpu.count += 2;
+    match op {
+        0x18 => cpu.carry = false, //CLC
+        0x38 => cpu.carry = true, //SEC
+        0x58 => cpu.irq_disable = false, //CLI
+        0x78 => cpu.irq_disable = true, //SEI
+        0xB8 => cpu.overflow = false, //CLV
+        _ => panic!("Not implemented yet! Op: {}", op)
+    }
 }
 
 impl Cpu {
@@ -769,5 +855,17 @@ mod tests {
         assert_eq!(cpu.zero, true);
         assert_eq!(cpu.negative, false);
         assert_eq!(cpu.count, 2);
+    }
+
+    #[test]
+    fn beq_test() {
+        let (mut cpu, mut mem) = make_cpu();
+
+        cpu.pc = 1; // fake "decode" op
+        cpu.carry = true;
+        mem.write(1, 8);
+        beq(&mut cpu, &mut mem, relative);
+        assert_eq!(cpu.pc, 10);
+        assert_eq!(cpu.count, 3);
     }
 }
