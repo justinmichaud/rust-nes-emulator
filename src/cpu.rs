@@ -118,6 +118,20 @@ const OPCODES: Map<u8, (ALUOperation, AddressMode)> = phf_map!{
     0x76u8 => (ror, zero_page_x),
     0x6Eu8 => (ror, absolute),
     0x7Eu8 => (ror, absolute_x),
+
+    //BIT
+    0x24u8 => (bit, zero_page),
+    0x2Cu8 => (bit, absolute),
+
+    // CMP
+    0xC9u8 => (cmp, immediate),
+    0xC5u8 => (cmp, zero_page),
+    0xD5u8 => (cmp, zero_page_x),
+    0xCDu8 => (cmp, absolute),
+    0xDDu8 => (cmp, absolute_x),
+    0xD9u8 => (cmp, absolute_y),
+    0xC1u8 => (cmp, indirect_x),
+    0xD1u8 => (cmp, indirect_y),
 };
 
 #[derive(Debug)]
@@ -234,7 +248,8 @@ fn add_with_carry(cpu: &mut Cpu, val: u8) {
 
 fn sbc(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
     let val = mode(cpu, mem, true).read(cpu, mem);
-    add_with_carry(cpu, (-(val as i8)) as u8);
+    // Flip the bits for 2s compliment, but rely on carry to add 1
+    add_with_carry(cpu, !val);
 }
 
 fn and(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
@@ -310,6 +325,23 @@ fn ror(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
 
     cpu.zero = result == 0;
     cpu.negative = result&0b10000000 > 0;
+}
+
+fn bit(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+    let val = mode(cpu, mem, true).read(cpu, mem);
+
+    cpu.zero = val & cpu.a == 0;
+    cpu.negative = val & 0b10000000 > 0;
+    cpu.overflow = val & 0b01000000 > 0;
+}
+
+fn cmp(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+    let a = cpu.a;
+    let overflow = cpu.overflow;
+    cpu.carry = true;
+    sbc(cpu, mem, mode);
+    cpu.a = a;
+    cpu.overflow = overflow;
 }
 
 fn manual(cpu: &mut Cpu, mem: &mut Mem, op: u8) {
@@ -449,6 +481,7 @@ mod tests {
         let (mut cpu, mut mem) = make_cpu();
 
         cpu.a = 1;
+        cpu.carry = true;
         run_instr(sbc, 1, &mut cpu, &mut mem);
         assert_eq!(cpu.a, 0);
         assert_eq!(cpu.carry, true);
@@ -463,6 +496,7 @@ mod tests {
         let (mut cpu, mut mem) = make_cpu();
 
         cpu.a = 1;
+        cpu.carry = true;
         run_instr(sbc, 2, &mut cpu, &mut mem);
         assert_eq!(cpu.a, 0xFF);
         assert_eq!(cpu.carry, false);
@@ -569,6 +603,48 @@ mod tests {
         assert_eq!(cpu.overflow, false);
         assert_eq!(cpu.zero, false);
         assert_eq!(cpu.negative, true);
+        assert_eq!(cpu.count, 2);
+    }
+
+    #[test]
+    fn cmp_test_eq() {
+        let (mut cpu, mut mem) = make_cpu();
+
+        cpu.a = 1;
+        run_instr(cmp, 0x1, &mut cpu, &mut mem);
+        assert_eq!(cpu.a, 1);
+        assert_eq!(cpu.carry, true);
+        assert_eq!(cpu.overflow, false);
+        assert_eq!(cpu.zero, true);
+        assert_eq!(cpu.negative, false);
+        assert_eq!(cpu.count, 2);
+    }
+
+    #[test]
+    fn cmp_test_l() {
+        let (mut cpu, mut mem) = make_cpu();
+
+        cpu.a = 1;
+        run_instr(cmp, 0x2, &mut cpu, &mut mem);
+        assert_eq!(cpu.a, 1);
+        assert_eq!(cpu.carry, false);
+        assert_eq!(cpu.overflow, false);
+        assert_eq!(cpu.zero, false);
+        assert_eq!(cpu.negative, true);
+        assert_eq!(cpu.count, 2);
+    }
+
+    #[test]
+    fn cmp_test_g() {
+        let (mut cpu, mut mem) = make_cpu();
+
+        cpu.a = 1;
+        run_instr(cmp, 0, &mut cpu, &mut mem);
+        assert_eq!(cpu.a, 1);
+        assert_eq!(cpu.carry, true);
+        assert_eq!(cpu.overflow, false);
+        assert_eq!(cpu.zero, false);
+        assert_eq!(cpu.negative, false);
         assert_eq!(cpu.count, 2);
     }
 }
