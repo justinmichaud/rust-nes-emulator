@@ -615,6 +615,19 @@ fn manual(cpu: &mut Cpu, mem: &mut Mem, op: u8) {
             let p = pull(cpu, mem);
             cpu.set_p(p);
         },
+        0x00 => { //BRK
+            cpu.count += 2;
+            let pc = cpu.pc + 1;
+            push16(cpu, mem, pc);
+            manual(cpu, mem, 0x08); //PHP
+            cpu.pc = mem.read16(0xFFFE);
+            cpu.irq_disable = true;
+        },
+        0x40 => { //RTI
+            manual(cpu, mem, 0x28); //PLP
+            let pc = pull16(cpu, mem);
+            cpu.pc = pc;
+        },
         _ => panic!("Not implemented yet! Op: {}", op)
     }
 }
@@ -689,7 +702,6 @@ impl Cpu {
     pub fn set_p(&mut self, val: u8) {
         self.negative       = val&0b10000000>0;
         self.overflow       = val&0b01000000>0;
-        self.interrupt      = val&0b00010000>0;
         self.irq_disable    = val&0b00000100>0;
         self.zero           = val&0b00000010>0;
         self.carry          = val&0b00000001>0;
@@ -1089,5 +1101,53 @@ mod tests {
         cpu.count = 0;
 
         assert_eq!(cpu, cpu_a);
+    }
+
+    #[test]
+    fn brk_test() {
+        let mut cpu = Cpu::new(0);
+        let mut mem = Mem::new(vec![0; 16*1024], vec![], 8*1024);
+
+        cpu.s = 0xFF;
+        cpu.pc = 11;
+        cpu.negative = false;
+        cpu.overflow = false;
+        cpu.carry = false;
+        cpu.zero = false;
+        cpu.irq_disable = false;
+        mem.write16(0xFFFE, 0x0100);
+
+        manual(&mut cpu, &mut mem, 0x00); //BRK
+        assert_eq!(cpu.count, 7);
+        assert_eq!(cpu.pc, 0x0100);
+        assert_eq!(cpu.s, 0xFC);
+        assert_eq!(pull(&mut cpu, &mut mem), 0b00110000);
+        assert_eq!(pull16(&mut cpu, &mut mem), 12);
+    }
+
+    #[test]
+    fn brk_rti_test() {
+        let mut cpu = Cpu::new(0);
+        let mut mem = Mem::new(vec![0; 16*1024], vec![], 8*1024);
+
+        cpu.s = 0xFF;
+        cpu.pc = 11;
+        cpu.negative = false;
+        cpu.overflow = false;
+        cpu.carry = false;
+        cpu.zero = false;
+        cpu.irq_disable = false;
+        mem.write16(0xFFFE, 0x0100);
+
+        manual(&mut cpu, &mut mem, 0x00); //BRK
+        assert_eq!(cpu.count, 7);
+        assert_eq!(cpu.pc, 0x0100);
+        assert_eq!(cpu.s, 0xFC);
+
+        cpu.count = 0;
+        manual(&mut cpu, &mut mem, 0x40); //RTI
+        assert_eq!(cpu.count, 6);
+        assert_eq!(cpu.pc, 12);
+        assert_eq!(cpu.s, 0xFF);
     }
 }
