@@ -226,7 +226,7 @@ const OPCODES: Map<u8, (ALUOperation, AddressMode)> = phf_map!{
     0x8Cu8 => (sty, absolute),
 };
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Cpu {
     a: u8,
     x: u8,
@@ -591,6 +591,30 @@ fn manual(cpu: &mut Cpu, mem: &mut Mem, op: u8) {
         0x8A => cpu.a = cpu.x, //TXA
         0xA8 => cpu.y = cpu.a, //TAY
         0x98 => cpu.a = cpu.y, //TYA
+        0x9A => cpu.s = cpu.x, //TXS
+        0xBA => cpu.x = cpu.s, //TSX
+        0x48 => { //PHA
+            cpu.count += 1;
+            let a = cpu.a;
+            push(cpu, mem, a);
+        },
+        0x68 => { //PLA
+            cpu.count += 2;
+            cpu.a = pull(cpu, mem);
+        },
+        0x08 => { //PHP
+            cpu.count += 1;
+            let interrupt = cpu.interrupt;
+            cpu.interrupt = true;
+            let p = cpu.get_p();
+            push(cpu, mem, p);
+            cpu.interrupt = interrupt;
+        },
+        0x28 => { //PLP
+            cpu.count += 2;
+            let p = pull(cpu, mem);
+            cpu.set_p(p);
+        },
         _ => panic!("Not implemented yet! Op: {}", op)
     }
 }
@@ -613,6 +637,27 @@ fn sty(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
     m.write(cpu, mem, a);
 }
 
+fn push(cpu: &mut Cpu, mem: &mut Mem, val: u8) {
+    mem.write((0x01u16<<8) + cpu.s as u16, val);
+    cpu.s = ((cpu.s as u16 - 1)&0xFF) as u8;
+}
+
+fn push16(cpu: &mut Cpu, mem: &mut Mem, val: u16) {
+    push(cpu, mem, ((val&0xFF00)>>8) as u8);
+    push(cpu, mem, (val&0x00FF) as u8);
+}
+
+fn pull(cpu: &mut Cpu, mem: &mut Mem) -> u8 {
+    cpu.s = ((cpu.s as u16 + 1)&0xFF) as u8;
+    mem.read((0x01u16<<8) + cpu.s as u16)
+}
+
+fn pull16(cpu: &mut Cpu, mem: &mut Mem) -> u16 {
+    let lo = pull(cpu, mem);
+    let hi = pull(cpu, mem);
+    lo as u16 + ((hi as u16)<<8)
+}
+
 impl Cpu {
     pub fn new(pc: u16) -> Cpu {
         Cpu {
@@ -629,6 +674,25 @@ impl Cpu {
             zero: false,
             count: 0
         }
+    }
+
+    pub fn get_p(&self) -> u8 {
+        ((self.negative as u8)<<7)
+        + ((self.overflow as u8)<<6)
+        + (1u8<<5)
+        + ((self.interrupt as u8)<<4)
+        + ((self.irq_disable as u8)<<2)
+        + ((self.zero as u8)<<1)
+        + ((self.carry as u8)<<0)
+    }
+
+    pub fn set_p(&mut self, val: u8) {
+        self.negative       = val&0b10000000>0;
+        self.overflow       = val&0b01000000>0;
+        self.interrupt      = val&0b00010000>0;
+        self.irq_disable    = val&0b00000100>0;
+        self.zero           = val&0b00000010>0;
+        self.carry          = val&0b00000001>0;
     }
 
     pub fn tick(&mut self, mem: &mut Mem) {
@@ -984,5 +1048,46 @@ mod tests {
         assert_eq!(cpu.a, 15);
         assert_eq!(cpu.count, 6);
         assert_eq!(mem.read(5), 15);
+    }
+
+    #[test]
+    fn stack_test() {
+        let (mut cpu, mut mem) = make_cpu();
+
+        cpu.s = 0xFF;
+        push(&mut cpu, &mut mem, 15);
+        assert_eq!(cpu.s, 0xFE);
+        assert_eq!(mem.read(0x01FF), 15);
+
+        assert_eq!(pull(&mut cpu, &mut mem), 15);
+        assert_eq!(cpu.s, 0xFF);
+    }
+
+    #[test]
+    fn stack_test_16() {
+        let (mut cpu, mut mem) = make_cpu();
+
+        cpu.s = 0xFF;
+        push16(&mut cpu, &mut mem, 0xBEEF);
+        assert_eq!(cpu.s, 0xFD);
+        assert_eq!(mem.read16(0x01FE), 0xBEEF);
+
+        assert_eq!(pull16(&mut cpu, &mut mem), 0xBEEF);
+        assert_eq!(cpu.s, 0xFF);
+    }
+
+    #[test]
+    fn p_test() {
+        let (mut cpu, mut mem) = make_cpu();
+
+        cpu.s = 0xFF;
+        cpu.carry = true;
+        let cpu_a = cpu.clone();
+        manual(&mut cpu, &mut mem, 0x08); //PHP
+        manual(&mut cpu, &mut mem, 0x28); //PLP
+        assert_eq!(cpu.count, 7);
+        cpu.count = 0;
+
+        assert_eq!(cpu, cpu_a);
     }
 }
