@@ -205,6 +205,25 @@ const OPCODES: Map<u8, (ALUOperation, AddressMode)> = phf_map!{
     0xB4u8 => (ldy, zero_page_x),
     0xACu8 => (ldy, absolute),
     0xBCu8 => (ldy, absolute_x),
+
+    //STA
+    0x85u8 => (sta, zero_page),
+    0x95u8 => (sta, zero_page_x),
+    0x8Du8 => (sta, absolute),
+    0x9Du8 => (sta, absolute_x),
+    0x99u8 => (sta, absolute_y),
+    0x81u8 => (sta, indirect_x),
+    0x91u8 => (sta, indirect_y),
+
+    //STX
+    0x86u8 => (stx, zero_page),
+    0x96u8 => (stx, zero_page_y),
+    0x8Eu8 => (stx, absolute),
+
+    //STY
+    0x84u8 => (sty, zero_page),
+    0x94u8 => (sty, zero_page_x),
+    0x8Cu8 => (sty, absolute),
 };
 
 #[derive(Debug)]
@@ -568,8 +587,30 @@ fn manual(cpu: &mut Cpu, mem: &mut Mem, op: u8) {
         0x78 => cpu.irq_disable = true, //SEI
         0xB8 => cpu.overflow = false, //CLV
         0xEA => (), //NOP
+        0xAA => cpu.x = cpu.a, //TAX
+        0x8A => cpu.a = cpu.x, //TXA
+        0xA8 => cpu.y = cpu.a, //TAY
+        0x98 => cpu.a = cpu.y, //TYA
         _ => panic!("Not implemented yet! Op: {}", op)
     }
+}
+
+fn sta(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+    let m = mode(cpu, mem, false);
+    let a = cpu.a;
+    m.write(cpu, mem, a);
+}
+
+fn stx(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+    let m = mode(cpu, mem, false);
+    let a = cpu.x;
+    m.write(cpu, mem, a);
+}
+
+fn sty(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+    let m = mode(cpu, mem, false);
+    let a = cpu.y;
+    m.write(cpu, mem, a);
 }
 
 impl Cpu {
@@ -927,5 +968,21 @@ mod tests {
         assert_eq!(cpu.zero, false);
         assert_eq!(cpu.negative, false);
         assert_eq!(cpu.count, 2);
+    }
+
+    #[test]
+    fn sta_test() {
+        let (mut cpu, mut mem) = make_cpu();
+
+        cpu.a = 15;
+        cpu.y = 1;
+        cpu.pc = 0;
+        mem.write16(0, 200);
+        mem.write16(200, 4);
+        mem.write(5, 0xFF);
+        sta(&mut cpu, &mut mem, indirect_y);
+        assert_eq!(cpu.a, 15);
+        assert_eq!(cpu.count, 6);
+        assert_eq!(mem.read(5), 15);
     }
 }
