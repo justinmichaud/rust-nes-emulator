@@ -1,9 +1,21 @@
 use cpu::*;
 use mem::*;
+use std::io;
 
 pub struct Nes {
     cpu: Cpu,
-    mem: Mem
+    mem: Mem,
+    pub debug: bool
+}
+
+fn get_line() -> String {
+    let mut input = String::new();
+    match io::stdin().read_line(&mut input) {
+        Ok(n) => {
+            input
+        }
+        Err(error) => panic!("Could not read from stdin"),
+    }
 }
 
 impl Nes {
@@ -14,11 +26,18 @@ impl Nes {
 
         Nes {
             cpu: Cpu::new(mem.read16(0xFFFC)),
-            mem: mem
+            mem: mem,
+            debug: false
         }
     }
 
     pub fn tick(&mut self) {
         self.cpu.tick(&mut self.mem);
+
+        if self.debug {
+            if get_line().starts_with("d") {
+                self.debug = false;
+            }
+        }
     }
 }

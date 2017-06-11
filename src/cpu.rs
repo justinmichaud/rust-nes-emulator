@@ -339,7 +339,7 @@ fn relative(cpu: &mut Cpu, mem: &Mem, page_matters: bool) -> AddressModeResult {
         cpu.count = cpu.count + 1;
     }
     cpu.count = cpu.count + 1;
-    Addr(cpu.pc + arg as u16)
+    Addr((cpu.pc&0xFF00) + ((cpu.pc + arg as u16)&0x00FF))
 }
 
 fn adc(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
@@ -580,8 +580,6 @@ fn ldy(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
 }
 
 fn manual(cpu: &mut Cpu, mem: &mut Mem, op: u8) {
-    println!("Manual {:X}", op);
-
     cpu.count += 2;
     match op {
         0x18 => cpu.carry = false, //CLC
@@ -648,6 +646,8 @@ fn manual(cpu: &mut Cpu, mem: &mut Mem, op: u8) {
                 + ((mem.read((addr&0xFF00) + ((addr+1)&0x00FF)) as u16)<<8);
             cpu.pc = pc;
         },
+        0xF8 => (), //Ignore decimal mode
+        0xD8 => (), //Ignore decimal mode
         _ => panic!("Not implemented yet! Op: {}", op)
     }
 }
@@ -740,16 +740,19 @@ impl Cpu {
     }
 
     pub fn tick(&mut self, mem: &mut Mem) {
-        println!("State before: {:?}", self);
-
         let op = mem.read(self.pc);
         self.pc += 1;
 
+        print!("{:04X}: {:0X}", self.pc-1, op);
+        if self.pc <= 0xFFFE {
+            println!(" {:0X} {:0X}", mem.read(self.pc), mem.read(self.pc+1));
+        }
+        else {
+            println!();
+        }
+
         match OPCODES.get(&op) {
-            Some(&(alu, mode)) => {
-                println!("{:04X}: {:0X}", self.pc-1, op);
-                alu(self, mem, mode)
-            },
+            Some(&(alu, mode)) => alu(self, mem, mode),
             _ => manual(self, mem, op)
         }
 

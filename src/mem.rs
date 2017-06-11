@@ -11,7 +11,8 @@ pub struct Mem {
 enum MemoryRef {
     Ram(usize),
     Prg(usize),
-    PrgRam(usize)
+    PrgRam(usize),
+    Null
 }
 use self::MemoryRef::*;
 
@@ -29,7 +30,8 @@ impl Mem {
         match self.mem_ref(addr) {
             Ram(addr) => self.ram[addr],
             Prg(addr) => self.prg[addr],
-            PrgRam(addr) => self.prg_ram[addr]
+            PrgRam(addr) => self.prg_ram[addr],
+            Null => 0
         }
     }
 
@@ -41,7 +43,8 @@ impl Mem {
         match self.mem_ref(addr) {
             Ram(addr) => self.ram[addr] = val,
             Prg(addr) => self.prg[addr] = val,
-            PrgRam(addr) => self.prg_ram[addr] = val
+            PrgRam(addr) => self.prg_ram[addr] = val,
+            Null => ()
         }
     }
 
@@ -54,9 +57,9 @@ impl Mem {
         match addr as usize {
             0...0x07FF => Ram(addr as usize),
             0x0800...0x1FFF => self.mirror_ref(0...0x07FF, 0x0800...0x1FFF, addr),
-            //0x2000...0x2007 => /* ppu */,
+            0x2000...0x2007 => Null /* ppu */,
             0x2008...0x3FFF => self.mirror_ref(0x2000...0x2007, 0x2008...0x3FFF, addr),
-            //0x4000...0x4017 => /* apu */,
+            0x4000...0x4017 => Null /* apu */,
             0x4020...0xFFFF => self.mapper_ref(addr),
             _ => {
                 panic!("Reference to invalid address {:X}", addr);

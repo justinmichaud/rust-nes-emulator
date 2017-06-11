@@ -9,35 +9,44 @@
 
 #![plugin(phf_macros)]
 extern crate phf;
+extern crate piston_window;
+
+use piston_window::*;
 
 mod cpu;
 mod ines;
 mod nes;
 mod mem;
 
-use std::io;
-
 use ines::*;
 use nes::*;
-
-fn get_line() -> String {
-    let mut input = String::new();
-    match io::stdin().read_line(&mut input) {
-        Ok(n) => {
-            input
-        }
-        Err(error) => panic!("Could not read from stdin"),
-    }
-}
 
 fn emulate((flags, prg, chr) : (Flags, Vec<u8>, Vec<u8>)) {
     println!("Loaded rom with {:?}", flags);
     let mut nes = Nes::new(prg, chr, flags.mapper, flags.prg_ram_size);
 
-    loop {
-        nes.tick();
-        if get_line().starts_with("b") {
-            break
+    let mut window: PistonWindow =
+        WindowSettings::new("Emulator", [256*3, 240*3])
+            .exit_on_esc(true).build().unwrap();
+
+    while let Some(e) = window.next() {
+        if let Some(_) = e.update_args() {
+            nes.tick();
+        }
+
+        if let Some(_) = e.render_args() {
+            window.draw_2d(&e, |c, g| {
+                clear([1.0; 4], g);
+                rectangle([1.0, 0.0, 0.0, 1.0], // red
+                          [0.0, 0.0, 100.0, 100.0],
+                          c.transform, g);
+            });
+        }
+
+        if let Some(button) = e.press_args() {
+            if button == Button::Keyboard(Key::D) {
+                nes.debug = true;
+            }
         }
     }
 }
