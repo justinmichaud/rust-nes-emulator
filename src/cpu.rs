@@ -242,7 +242,8 @@ pub struct Cpu {
     irq_disable: bool,
     zero: bool,
     carry: bool,
-    count: u32
+    pub count: u32,
+    pub debug: bool
 }
 
 fn immediate(cpu: &mut Cpu, mem: &Mem, _: bool) -> AddressModeResult {
@@ -320,15 +321,15 @@ fn indirect_y(cpu: &mut Cpu, mem: &Mem, page_matters: bool) -> AddressModeResult
     Addr(base + cpu.y as u16)
 }
 
-fn implied_a(cpu: &mut Cpu, mem: &Mem, _: bool) -> AddressModeResult {
+fn implied_a(_: &mut Cpu, _: &Mem, _: bool) -> AddressModeResult {
     Accumulator
 }
 
-fn implied_x(cpu: &mut Cpu, mem: &Mem, _: bool) -> AddressModeResult {
+fn implied_x(_: &mut Cpu, _: &Mem, _: bool) -> AddressModeResult {
     X
 }
 
-fn implied_y(cpu: &mut Cpu, mem: &Mem, _: bool) -> AddressModeResult {
+fn implied_y(_: &mut Cpu, _: &Mem, _: bool) -> AddressModeResult {
     Y
 }
 
@@ -717,7 +718,8 @@ impl Cpu {
             irq_disable: false,
             carry: false,
             zero: false,
-            count: 0
+            count: 0,
+            debug: false
         }
     }
 
@@ -743,12 +745,13 @@ impl Cpu {
         let op = mem.read(self.pc);
         self.pc += 1;
 
-        print!("{:04X}: {:0X}", self.pc-1, op);
-        if self.pc <= 0xFFFE {
-            println!(" {:0X} {:0X}", mem.read(self.pc), mem.read(self.pc+1));
-        }
-        else {
-            println!();
+        if self.debug {
+            print!("{:04X}: {:0X}", self.pc - 1, op);
+            if self.pc <= 0xFFFE {
+                println!(" {:0X} {:0X}", mem.read(self.pc), mem.read(self.pc + 1));
+            } else {
+                println!();
+            }
         }
 
         match OPCODES.get(&op) {
@@ -756,7 +759,9 @@ impl Cpu {
             _ => manual(self, mem, op)
         }
 
-        println!("State after: {:?}", self);
+        if self.debug {
+            println!("State after: {:?}", self);
+        }
     }
 }
 
