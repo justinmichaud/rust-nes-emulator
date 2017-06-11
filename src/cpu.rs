@@ -224,6 +224,9 @@ const OPCODES: Map<u8, (ALUOperation, AddressMode)> = phf_map!{
     0x84u8 => (sty, zero_page),
     0x94u8 => (sty, zero_page_x),
     0x8Cu8 => (sty, absolute),
+
+    //JSR
+    0x20u8 => (jsr, absolute),
 };
 
 #[derive(Debug, PartialEq, Clone)]
@@ -628,6 +631,23 @@ fn manual(cpu: &mut Cpu, mem: &mut Mem, op: u8) {
             let pc = pull16(cpu, mem);
             cpu.pc = pc;
         },
+        0x60 => { //RTS
+            cpu.count += 4;
+            let pc = pull16(cpu, mem);
+            cpu.pc = pc+1;
+        },
+        0x4c => { //JMP (absolute)
+            cpu.count += 1;
+            let pc = mem.read16(cpu.pc);
+            cpu.pc = pc;
+        },
+        0x6c => { //JMP (indirect)
+            cpu.count += 3;
+            let addr = mem.read16(cpu.pc);
+            let pc = mem.read(addr) as u16
+                + ((mem.read((addr&0xFF00) + ((addr+1)&0x00FF)) as u16)<<8);
+            cpu.pc = pc;
+        },
         _ => panic!("Not implemented yet! Op: {}", op)
     }
 }
@@ -669,6 +689,18 @@ fn pull16(cpu: &mut Cpu, mem: &mut Mem) -> u16 {
     let lo = pull(cpu, mem);
     let hi = pull(cpu, mem);
     lo as u16 + ((hi as u16)<<8)
+}
+
+fn jsr(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+    cpu.count += 2;
+    let val = match mode(cpu, mem, false) {
+        Addr(a) => a,
+        _ => panic!("Jsr instruction address mode must produce an address result!")
+    };
+
+    let pc = cpu.pc-1;
+    push16(cpu, mem, pc);
+    cpu.pc = val;
 }
 
 impl Cpu {
@@ -1149,5 +1181,67 @@ mod tests {
         assert_eq!(cpu.count, 6);
         assert_eq!(cpu.pc, 12);
         assert_eq!(cpu.s, 0xFF);
+    }
+
+    #[test]
+    fn jsr_test() {
+        let (mut cpu, mut mem) = make_cpu();
+
+        cpu.s = 0xFF;
+        cpu.pc = 11;
+
+        mem.write16(11, 1);
+        jsr(&mut cpu, &mut mem, absolute);
+        assert_eq!(cpu.count, 6);
+        assert_eq!(cpu.pc, 1);
+        assert_eq!(cpu.s, 0xFD);
+        assert_eq!(pull16(&mut cpu, &mut mem), 12);
+    }
+
+    #[test]
+    fn jsr_rts_test() {
+        let (mut cpu, mut mem) = make_cpu();
+
+        cpu.s = 0xFF;
+        cpu.pc = 11;
+
+        mem.write16(11, 1);
+        jsr(&mut cpu, &mut mem, absolute);
+        assert_eq!(cpu.count, 6);
+        assert_eq!(cpu.pc, 1);
+        assert_eq!(cpu.s, 0xFD);
+
+        cpu.count = 0;
+        manual(&mut cpu, &mut mem, 0x60); //RTS
+        assert_eq!(cpu.count, 6);
+        assert_eq!(cpu.pc, 13);
+        assert_eq!(cpu.s, 0xFF);
+    }
+
+    #[test]
+    fn jmp_test() {
+        let (mut cpu, mut mem) = make_cpu();
+
+        cpu.pc = 11;
+
+        mem.write16(11, 0x10FF);
+        manual(&mut cpu, &mut mem, 0x4C); //JMP (absolute)
+        assert_eq!(cpu.count, 3);
+        assert_eq!(cpu.pc, 0x10FF);
+    }
+
+    #[test]
+    fn jmp_wrap_test() {
+        let (mut cpu, mut mem) = make_cpu();
+
+        cpu.pc = 11;
+
+        mem.write16(11, 0x10FF);
+        mem.write(0x10FF, 0xFF);
+        mem.write(0x1000, 0xBE);
+        mem.write(0x1100, 0xAA);
+        manual(&mut cpu, &mut mem, 0x6C); //JMP (indirect)
+        assert_eq!(cpu.count, 5);
+        assert_eq!(cpu.pc, 0xBEFF);
     }
 }
