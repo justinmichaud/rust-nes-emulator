@@ -5,8 +5,10 @@
 #![plugin(phf_macros)]
 extern crate phf;
 extern crate piston_window;
+extern crate image;
 
 use piston_window::*;
+use texture::Filter;
 use std::time::Instant;
 
 mod cpu;
@@ -26,8 +28,6 @@ fn emulate((flags, prg, chr) : (Flags, Vec<u8>, Vec<u8>)) {
             .exit_on_esc(true).build().unwrap();
     let mut frames = 0;
     let mut last_time = Instant::now();
-
-    let mut x = 0f64;
 
     while let Some(e) = window.next() {
         if let Some(_) = e.update_args() {
@@ -51,15 +51,42 @@ fn emulate((flags, prg, chr) : (Flags, Vec<u8>, Vec<u8>)) {
                 last_time = Instant::now();
             }
 
-            window.draw_2d(&e, |c, g| {
-                clear([1.0; 4], g);
-                rectangle([1.0, 0.0, 0.0, 1.0], // red
-                          [0.0, 0.0, x + 100.0, 100.0],
-                          c.transform, g);
-                x = x + 5f64;
-                if x > 200f64 {
-                    x = 0f64;
+            let sprite = [
+                1,2,2,1,
+                0,1,1,0,
+                0,1,1,0,
+                1,1,1,1
+            ];
+
+            let mut canvas = image::ImageBuffer::new(4, 4);
+            let mut texture_settings = TextureSettings::new();
+            texture_settings.set_min(Filter::Nearest);
+            texture_settings.set_mag(Filter::Nearest);
+            texture_settings.set_mipmap(Filter::Nearest);
+            let mut texture = Texture::from_image(
+                &mut window.factory,
+                &canvas,
+                &texture_settings
+            ).unwrap();
+
+            for x in 0..4 {
+                for y in 0..4 {
+                    let idx = sprite[y*4+x];
+                    let colour = match idx {
+                        1 => image::Rgba([0, 255, 0, 255]),
+                        2 => image::Rgba([255, 0, 0, 255]),
+                        _ => image::Rgba([0, 0, 0, 0]),
+                    };
+                    canvas.put_pixel(x as u32, y as u32, colour);
                 }
+            }
+
+            texture.update(&mut window.encoder, &canvas).unwrap();
+
+            window.draw_2d(&e, |c, g| {
+                clear([0.0; 4], g);
+                let c = c.scale(100.,100.);
+                image(&texture, c.transform , g);
             });
         }
 
