@@ -25,7 +25,7 @@ fn get_line() -> String {
 }
 
 impl Nes {
-    pub fn new(prg: Vec<u8>, chr: Vec<u8>, mapper: u8, prg_ram_size: usize) -> Nes {
+    pub fn new(prg: Vec<u8>, chr: Vec<u8>, mapper: u8, prg_ram_size: usize, horiz_mapping: bool) -> Nes {
         assert!(mapper == 0, "Only mapper 0 is supported!");
 
         let mem = MainMemory::new(prg, prg_ram_size);
@@ -34,7 +34,7 @@ impl Nes {
             cpu: Cpu::new(mem.read16(0xFFFC)),
             chipset: Chipset {
                 mem: mem,
-                ppu: Ppu::new(chr)
+                ppu: Ppu::new(chr, horiz_mapping)
             }
         }
     }
@@ -53,7 +53,7 @@ impl Nes {
 impl Mem for Chipset {
     fn read(&self, addr: u16) -> u8 {
         match addr as usize {
-            0x2000 ... 0x2007 => self.ppu.read(addr),
+            0x2000 ... 0x2007 => self.ppu.read_main(addr),
             0x4000 ... 0x4017 => 0 /* apu */,
             _ => self.mem.read(addr)
         }
@@ -61,7 +61,7 @@ impl Mem for Chipset {
 
     fn write(&mut self, addr: u16, val: u8) {
         match addr as usize {
-            0x2000 ... 0x2007 => self.ppu.write(addr, val),
+            0x2000 ... 0x2007 => self.ppu.write_main(addr, val),
             0x4000 ... 0x4017 => () /* apu */,
             _ => self.mem.write(addr, val)
         }

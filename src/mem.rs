@@ -1,3 +1,5 @@
+use std::ops::RangeInclusive;
+
 pub trait Mem {
     fn read(&self, addr: u16) -> u8;
 
@@ -11,4 +13,11 @@ pub trait Mem {
         self.write(addr, (val&0x00FF) as u8);
         self.write(addr+1, ((val&0xFF00)>>8) as u8);
     }
+}
+
+pub fn mirror_addr(from : RangeInclusive<u16>, to : RangeInclusive<u16>, addr : u16) -> u16 {
+    let size = from.end - from.start + 1;
+
+    let offset = (addr - to.start) % size;
+    from.start + offset
 }

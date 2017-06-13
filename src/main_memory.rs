@@ -1,4 +1,3 @@
-use std::ops::RangeInclusive;
 use mem::*;
 
 pub struct MainMemory {
@@ -26,20 +25,13 @@ impl MainMemory {
     fn mem_ref(&self, addr: u16) -> MemoryRef {
         match addr as usize {
             0...0x07FF => Ram(addr as usize),
-            0x0800...0x1FFF => self.mirror_ref(0...0x07FF, 0x0800...0x1FFF, addr),
-            0x2008...0x3FFF => self.mirror_ref(0x2000...0x2007, 0x2008...0x3FFF, addr),
+            0x0800...0x1FFF => self.mem_ref(mirror_addr(0...0x07FF, 0x0800...0x1FFF, addr)),
+            0x2008...0x3FFF => self.mem_ref(mirror_addr(0x2000...0x2007, 0x2008...0x3FFF, addr)),
             0x4020...0xFFFF => self.mapper_ref(addr),
             _ => {
                 panic!("Reference to invalid main memory address {:X}", addr);
             }
         }
-    }
-
-    fn mirror_ref(&self, from : RangeInclusive<u16>, to : RangeInclusive<u16>, addr : u16) -> MemoryRef {
-        let size = from.end - from.start + 1;
-
-        let offset = (addr - to.start) % size;
-        self.mem_ref(from.start + offset)
     }
 
     fn mapper_ref(&self, addr: u16) -> MemoryRef {
@@ -54,7 +46,7 @@ impl MainMemory {
                     Prg(addr as usize - 0x8000)
                 }
                 else {
-                    self.mirror_ref(0x8000...0xBFFF, 0xC000...0xFFFF, addr)
+                    self.mem_ref(mirror_addr(0x8000...0xBFFF, 0xC000...0xFFFF, addr))
                 }
             },
             _ => {

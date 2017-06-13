@@ -1,4 +1,3 @@
-use main_memory::*;
 use mem::*;
 use phf::Map;
 use std::fmt;
@@ -769,8 +768,9 @@ impl Cpu {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use main_memory::*;
 
-    fn make_cpu() -> (Cpu, Mem) {
+    fn make_cpu() -> (Cpu, MainMemory) {
         let mut cpu = Cpu::new(0);
         let mem = MainMemory::new(vec![], 0);
 
