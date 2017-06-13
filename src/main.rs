@@ -15,6 +15,8 @@ mod cpu;
 mod ines;
 mod nes;
 mod mem;
+mod ppu;
+mod main_memory;
 
 use ines::*;
 use nes::*;
