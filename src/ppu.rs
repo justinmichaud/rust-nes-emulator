@@ -1,4 +1,10 @@
 use mem::*;
+use cpu::*;
+
+use piston_window::*;
+use texture::Filter;
+use image;
+use std::borrow::BorrowMut;
 
 pub struct Ppu {
     chr: Vec<u8>,
@@ -25,7 +31,9 @@ pub struct Ppu {
 
     sprite_overflow: bool,
     sprite_0_hit: bool,
-    vertical_blanking: bool
+    vertical_blanking: bool,
+
+    texture: Box<Option<G2dTexture>>
 }
 
 impl Ppu {
@@ -56,6 +64,8 @@ impl Ppu {
             sprite_overflow: false,
             sprite_0_hit: false,
             vertical_blanking: false,
+
+            texture: Box::new(None)
         }
     }
 
@@ -99,6 +109,54 @@ impl Ppu {
                 panic!("Write to invalid main address {:X}", addr);
             }
         }
+    }
+
+    pub fn tick(&mut self, cpu: &mut Cpu) {
+
+    }
+
+    pub fn prepare_draw(&mut self, window: &mut PistonWindow) {
+        let sprite = [
+            1,2,2,1,
+            0,1,1,0,
+            0,1,1,0,
+            1,1,1,1
+        ];
+
+        let mut canvas = image::ImageBuffer::new(4, 4);
+        let mut texture_settings = TextureSettings::new();
+        texture_settings.set_min(Filter::Nearest);
+        texture_settings.set_mag(Filter::Nearest);
+        texture_settings.set_mipmap(Filter::Nearest);
+        let mut texture = Texture::from_image(
+            &mut window.factory,
+            &canvas,
+            &texture_settings
+        ).unwrap();
+
+        for x in 0..4 {
+            for y in 0..4 {
+                let idx = sprite[y*4+x];
+                let colour = match idx {
+                    1 => image::Rgba([0, 255, 0, 255]),
+                    2 => image::Rgba([255, 0, 0, 255]),
+                    _ => image::Rgba([0, 0, 0, 0]),
+                };
+                canvas.put_pixel(x as u32, y as u32, colour);
+            }
+        }
+
+        texture.update(&mut window.encoder, &canvas).unwrap();
+        self.texture = Box::new(Some(texture));
+    }
+
+    pub fn draw(&mut self, c: Context, g: &mut G2d) {
+        let c = c.scale(100.,100.);
+        let tex = match *self.texture.borrow_mut() {
+            Some(ref mut t) => t,
+            _ => panic!()
+        };
+        image(tex, c.transform , g);
     }
 }
 

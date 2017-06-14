@@ -3,6 +3,7 @@ use mem::*;
 use main_memory::*;
 use ppu::*;
 use std::io;
+use piston_window::*;
 
 pub struct Nes {
     pub cpu: Cpu,
@@ -40,13 +41,29 @@ impl Nes {
     }
 
     pub fn tick(&mut self) {
-        self.cpu.tick(&mut self.chipset);
+        // 523 lines each of 341 cycles and 1 line of 340 cycles
+        //      = 178683 PPU cycles per 2 fields
+        // http://forums.nesdev.com/viewtopic.php?t=1675
+        while self.cpu.count < 178683/3 {
+            self.cpu.tick(&mut self.chipset);
+            self.chipset.ppu.tick(&mut self.cpu);
 
-        if self.cpu.debug {
-            if get_line().starts_with("d") {
-                self.cpu.debug = false;
+            if self.cpu.debug {
+                if get_line().starts_with("d") {
+                    self.cpu.debug = false;
+                }
             }
         }
+
+        self.cpu.count -= 178683/3;
+    }
+
+    pub fn prepare_draw(&mut self, window: &mut PistonWindow) {
+        self.chipset.ppu.prepare_draw(window)
+    }
+
+    pub fn draw(&mut self, c: Context, g: &mut G2d) {
+        self.chipset.ppu.draw(c, g)
     }
 }
 
