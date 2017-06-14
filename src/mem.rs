@@ -1,9 +1,9 @@
 use std::ops::RangeInclusive;
 
 pub trait Mem {
-    fn read(&self, addr: u16) -> u8;
+    fn read(&mut self, addr: u16) -> u8;
 
-    fn read16(&self, addr: u16) -> u16 {
+    fn read16(&mut self, addr: u16) -> u16 {
         self.read(addr) as u16 + ((self.read(addr+1) as u16)<<8)
     }
 

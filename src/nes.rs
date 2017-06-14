@@ -29,7 +29,7 @@ impl Nes {
     pub fn new(prg: Vec<u8>, chr: Vec<u8>, mapper: u8, prg_ram_size: usize, horiz_mapping: bool) -> Nes {
         assert!(mapper == 0, "Only mapper 0 is supported!");
 
-        let mem = MainMemory::new(prg, prg_ram_size);
+        let mut mem = MainMemory::new(prg, prg_ram_size);
 
         Nes {
             cpu: Cpu::new(mem.read16(0xFFFC)),
@@ -44,18 +44,22 @@ impl Nes {
         // 523 lines each of 341 cycles and 1 line of 340 cycles
         //      = 178683 PPU cycles per 2 fields
         // http://forums.nesdev.com/viewtopic.php?t=1675
-        while self.cpu.count < 178683/3 {
-            self.cpu.tick(&mut self.chipset);
-            self.chipset.ppu.tick(&mut self.cpu);
+        // Divide by 2 to get per field, divide by 3 to get cpu cycles
+        // This is off, but it should be fine (I hope)
+        for _ in 0..2 {
+            while self.cpu.count < 29780 {
+                self.cpu.tick(&mut self.chipset);
+                self.chipset.ppu.tick(&mut self.cpu);
 
-            if self.cpu.debug {
-                if get_line().starts_with("d") {
-                    self.cpu.debug = false;
+                if self.cpu.debug {
+                    if get_line().starts_with("d") {
+                        self.cpu.debug = false;
+                    }
                 }
             }
-        }
 
-        self.cpu.count -= 178683/3;
+            self.cpu.count -= 29780;
+        }
     }
 
     pub fn prepare_draw(&mut self, window: &mut PistonWindow) {
@@ -68,7 +72,7 @@ impl Nes {
 }
 
 impl Mem for Chipset {
-    fn read(&self, addr: u16) -> u8 {
+    fn read(&mut self, addr: u16) -> u8 {
         match addr as usize {
             0x2000 ... 0x2007 => self.ppu.read_main(addr),
             0x4000 ... 0x4017 => 0 /* apu */,

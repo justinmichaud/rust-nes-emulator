@@ -57,7 +57,7 @@ impl MainMemory {
 }
 
 impl Mem for MainMemory {
-    fn read(&self, addr: u16) -> u8 {
+    fn read(&mut self, addr: u16) -> u8 {
         match self.mem_ref(addr) {
             Ram(addr) => self.ram[addr],
             Prg(addr) => self.prg[addr],

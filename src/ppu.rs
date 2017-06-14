@@ -33,7 +33,8 @@ pub struct Ppu {
     sprite_0_hit: bool,
     vertical_blanking: bool,
 
-    texture: Box<Option<G2dTexture>>
+    texture: Box<Option<G2dTexture>>,
+    has_blanked: bool,
 }
 
 impl Ppu {
@@ -65,14 +66,17 @@ impl Ppu {
             sprite_0_hit: false,
             vertical_blanking: false,
 
-            texture: Box::new(None)
+            texture: Box::new(None),
+            has_blanked: false,
         }
     }
 
-    pub fn read_main(&self, addr: u16) -> u8 {
+    pub fn read_main(&mut self, addr: u16) -> u8 {
         match addr as usize {
             0x2002 => {
-                ((self.vertical_blanking as u8)<<7)
+                let blanking = self.vertical_blanking;
+                self.vertical_blanking = false;
+                ((blanking as u8)<<7)
                     + ((self.sprite_0_hit as u8)<<6)
                     + ((self.sprite_overflow as u8)<<5)
             }
@@ -112,7 +116,14 @@ impl Ppu {
     }
 
     pub fn tick(&mut self, cpu: &mut Cpu) {
-
+        // 231 * 341 / 3 (rough estimate)
+        if cpu.count > 27393 && !self.has_blanked {
+            self.has_blanked = true;
+            self.vertical_blanking = true;
+            if self.generate_nmi {
+                cpu.nmi();
+            }
+        }
     }
 
     pub fn prepare_draw(&mut self, window: &mut PistonWindow) {
@@ -148,6 +159,8 @@ impl Ppu {
 
         texture.update(&mut window.encoder, &canvas).unwrap();
         self.texture = Box::new(Some(texture));
+
+        self.has_blanked = false;
     }
 
     pub fn draw(&mut self, c: Context, g: &mut G2d) {
@@ -161,7 +174,7 @@ impl Ppu {
 }
 
 impl Mem for Ppu {
-    fn read(&self, addr: u16) -> u8 {
+    fn read(&mut self, addr: u16) -> u8 {
         match addr as usize {
             0x0000...0x1FFF => self.chr[addr as usize],
             0x2000...0x2FFF => self.vram[addr as usize - 0x2000],

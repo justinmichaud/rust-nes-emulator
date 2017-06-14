@@ -24,7 +24,7 @@ impl fmt::Debug for AddressModeResult {
 }
 
 impl AddressModeResult {
-    fn read(&self, cpu: &Cpu, mem: &Mem) -> u8 {
+    fn read(&self, cpu: &Cpu, mem: &mut Mem) -> u8 {
         match *self {
             Val(val) => val,
             Addr(addr) => mem.read(addr),
@@ -45,7 +45,7 @@ impl AddressModeResult {
     }
 }
 
-type AddressMode = fn(&mut Cpu, &Mem, bool) -> AddressModeResult;
+type AddressMode = fn(&mut Cpu, &mut Mem, bool) -> AddressModeResult;
 type ALUOperation = fn(&mut Cpu, &mut Mem, AddressMode) -> ();
 
 const OPCODES: Map<u8, (ALUOperation, AddressMode)> = phf_map!{
@@ -246,42 +246,42 @@ pub struct Cpu {
     pub debug: bool
 }
 
-fn immediate(cpu: &mut Cpu, mem: &Mem, _: bool) -> AddressModeResult {
+fn immediate(cpu: &mut Cpu, mem: &mut Mem, _: bool) -> AddressModeResult {
     cpu.pc += 1;
     cpu.count += 2;
     Val(mem.read(cpu.pc-1))
 }
 
-fn zero_page(cpu: &mut Cpu, mem: &Mem, _: bool) -> AddressModeResult {
+fn zero_page(cpu: &mut Cpu, mem: &mut Mem, _: bool) -> AddressModeResult {
     let arg = mem.read(cpu.pc);
     cpu.pc += 1;
     cpu.count += 3;
     Addr(arg as u16)
 }
 
-fn zero_page_x(cpu: &mut Cpu, mem: &Mem, _: bool) -> AddressModeResult {
+fn zero_page_x(cpu: &mut Cpu, mem: &mut Mem, _: bool) -> AddressModeResult {
     let arg = mem.read(cpu.pc);
     cpu.pc += 1;
     cpu.count += 4;
     Addr((arg as u16 + cpu.x as u16) % 256)
 }
 
-fn zero_page_y(cpu: &mut Cpu, mem: &Mem, _: bool) -> AddressModeResult {
+fn zero_page_y(cpu: &mut Cpu, mem: &mut Mem, _: bool) -> AddressModeResult {
     let arg = mem.read(cpu.pc);
     cpu.pc += 1;
     cpu.count += 4;
     Addr((arg as u16 + cpu.y as u16) % 256)
 }
 
-fn absolute(cpu: &mut Cpu, mem: &Mem, _: bool) -> AddressModeResult {
+fn absolute(cpu: &mut Cpu, mem: &mut Mem, _: bool) -> AddressModeResult {
     cpu.pc += 2;
     cpu.count += 4;
     Addr(mem.read16(cpu.pc-2))
 }
 
-fn absolute_x(cpu: &mut Cpu, mem: &Mem, page_matters: bool) -> AddressModeResult {
+fn absolute_x(cpu: &mut Cpu, mem: &mut Mem, page_matters: bool) -> AddressModeResult {
     let arg = mem.read16(cpu.pc);
-    cpu.pc += 1;
+    cpu.pc += 2;
     cpu.count += 4;
     if !page_matters || (arg as u16 + cpu.x as u16)/256u16 != arg as u16 / 256u16 {
         cpu.count += 1;
@@ -289,9 +289,9 @@ fn absolute_x(cpu: &mut Cpu, mem: &Mem, page_matters: bool) -> AddressModeResult
     Addr(arg + cpu.x as u16)
 }
 
-fn absolute_y(cpu: &mut Cpu, mem: &Mem, page_matters: bool) -> AddressModeResult {
+fn absolute_y(cpu: &mut Cpu, mem: &mut Mem, page_matters: bool) -> AddressModeResult {
     let arg = mem.read16(cpu.pc);
-    cpu.pc += 1;
+    cpu.pc += 2;
     cpu.count += 4;
     if !page_matters || (arg as u16 + cpu.y as u16)/256u16 != arg as u16/256u16 {
         cpu.count += 1;
@@ -299,7 +299,7 @@ fn absolute_y(cpu: &mut Cpu, mem: &Mem, page_matters: bool) -> AddressModeResult
     Addr(arg + cpu.y as u16)
 }
 
-fn indirect_x(cpu: &mut Cpu, mem: &Mem, _: bool) -> AddressModeResult {
+fn indirect_x(cpu: &mut Cpu, mem: &mut Mem, _: bool) -> AddressModeResult {
     let arg = mem.read(cpu.pc);
     cpu.pc += 1;
     cpu.count += 6;
@@ -307,7 +307,7 @@ fn indirect_x(cpu: &mut Cpu, mem: &Mem, _: bool) -> AddressModeResult {
         + (mem.read((arg as u16 + cpu.x as u16 + 1) % 256) as u16)*256)
 }
 
-fn indirect_y(cpu: &mut Cpu, mem: &Mem, page_matters: bool) -> AddressModeResult {
+fn indirect_y(cpu: &mut Cpu, mem: &mut Mem, page_matters: bool) -> AddressModeResult {
     let arg = mem.read(cpu.pc);
     cpu.pc += 1;
     cpu.count += 5;
@@ -321,19 +321,19 @@ fn indirect_y(cpu: &mut Cpu, mem: &Mem, page_matters: bool) -> AddressModeResult
     Addr(base + cpu.y as u16)
 }
 
-fn implied_a(_: &mut Cpu, _: &Mem, _: bool) -> AddressModeResult {
+fn implied_a(_: &mut Cpu, _: &mut Mem, _: bool) -> AddressModeResult {
     Accumulator
 }
 
-fn implied_x(_: &mut Cpu, _: &Mem, _: bool) -> AddressModeResult {
+fn implied_x(_: &mut Cpu, _: &mut Mem, _: bool) -> AddressModeResult {
     X
 }
 
-fn implied_y(_: &mut Cpu, _: &Mem, _: bool) -> AddressModeResult {
+fn implied_y(_: &mut Cpu, _: &mut Mem, _: bool) -> AddressModeResult {
     Y
 }
 
-fn relative(cpu: &mut Cpu, mem: &Mem, page_matters: bool) -> AddressModeResult {
+fn relative(cpu: &mut Cpu, mem: &mut Mem, page_matters: bool) -> AddressModeResult {
     let arg = mem.read(cpu.pc);
     cpu.pc = cpu.pc + 1;
     if !page_matters || (cpu.pc + 1)/256u16 != (cpu.pc + arg as u16)/256u16 {
@@ -483,7 +483,7 @@ fn inc(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
     let val = r.read(cpu, mem);
     cpu.count = cpu.count + 2;
 
-    let result = ((val as u16 + 1)&0xFF) as u8;
+    let result = ((val as u16).wrapping_add(1)&0xFF) as u8;
     r.write(cpu, mem, result);
 
     cpu.zero = result == 0;
@@ -495,7 +495,7 @@ fn dec(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
     let val = r.read(cpu, mem);
     cpu.count = cpu.count + 2;
 
-    let result = ((val as u16 - 1)&0xFF) as u8;
+    let result = ((val as u16).wrapping_sub(1)&0xFF) as u8;
     r.write(cpu, mem, result);
 
     cpu.zero = result == 0;
@@ -762,6 +762,10 @@ impl Cpu {
         if self.debug {
             println!("State after: {:?}", self);
         }
+    }
+
+    pub fn nmi(&mut self) {
+        panic!("NMI not implemented yet!")
     }
 }
 
