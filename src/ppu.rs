@@ -12,6 +12,17 @@ pub struct Ppu {
     palate_ram: [u8; 32],
     horiz_mapping: bool,
 
+    oamaddr: u8,
+    oam: [u8; 256],
+
+    ppuscroll_x: u8,
+    ppuscroll_y: u8,
+    ppuscroll_pick: bool,
+
+    ppuaddr_hi: u8,
+    ppuaddr_lo: u8,
+    ppuaddr_pick: bool,
+
     nametable: u8, //0 = $2000; 1 = $2400; 2 = $2800; 3 = $2C00
     vram_inc: u8, //0=+1 across, 1=+32 down
     spritetable: u8, //0: $0000; 1: $1000; ignored in 8x16 mode
@@ -45,6 +56,17 @@ impl Ppu {
             horiz_mapping: horiz_mapping,
             palate_ram: [0; 32],
 
+            oamaddr: 0,
+            oam: [0; 256],
+
+            ppuscroll_x: 0,
+            ppuscroll_y: 0,
+            ppuscroll_pick: false,
+
+            ppuaddr_hi: 0,
+            ppuaddr_lo: 0,
+            ppuaddr_pick: false,
+
             nametable: 0,
             vram_inc: 0,
             spritetable: 0,
@@ -76,11 +98,22 @@ impl Ppu {
             0x2002 => {
                 let blanking = self.vertical_blanking;
                 self.vertical_blanking = false;
+
+                self.ppuscroll_pick = false;
+                self.ppuaddr_pick = false;
+
                 ((blanking as u8)<<7)
                     + ((self.sprite_0_hit as u8)<<6)
                     + ((self.sprite_overflow as u8)<<5)
-            }
-            0x2000...0x3000 => 0,
+            },
+            0x2003 => self.oam[self.oamaddr as usize],
+            0x2007 => {
+                let addr = ((self.ppuaddr_lo as u16)&0x00FF)
+                    + (((self.ppuaddr_hi as u16)&0xFF)<<8);
+                let val = self.read(addr);
+                self.increment_ppuaddr();
+                val
+            },
             _ => {
                 panic!("Read from invalid main address {:X}", addr);
             }
@@ -108,10 +141,50 @@ impl Ppu {
                 self.em_green               = val&0b01000000>0;
                 self.em_blue                = val&0b10000000>0;
             }
-            0x2002...0x3000 => (),
+            0x2003 => self.oamaddr = val,
+            0x2004 => {
+                self.oam[self.oamaddr as usize] = val;
+                self.oamaddr += 1;
+            },
+            0x2005 => {
+                if self.ppuscroll_pick {
+                    self.ppuscroll_y = val;
+                }
+                else {
+                    self.ppuscroll_x = val;
+                }
+                self.ppuscroll_pick = !self.ppuscroll_pick;
+            },
+            0x2006 => {
+                if self.ppuaddr_pick {
+                    self.ppuaddr_lo = val;
+                }
+                else {
+                    self.ppuaddr_hi = val;
+                }
+                self.ppuaddr_pick = !self.ppuaddr_pick;
+            },
+            0x2007 => {
+                let addr = ((self.ppuaddr_lo as u16)&0x00FF)
+                    + (((self.ppuaddr_hi as u16)&0xFF)<<8);
+                self.write(addr, val);
+                self.increment_ppuaddr()
+            },
             _ => {
                 panic!("Write to invalid main address {:X}", addr);
             }
+        }
+    }
+
+    pub fn ppudma(&mut self, val: u8, cpu: &mut Cpu, mem: &mut Mem) {
+        cpu.count += 1;
+        cpu.count += cpu.count%2;
+        cpu.count += 512;
+
+        let addr = ((val as u16)&0x00FF)<<8;
+        for i in 0...255 {
+            self.oam[self.oamaddr.wrapping_add(i) as usize]
+                = mem.read(addr + i as u16);
         }
     }
 
@@ -123,6 +196,9 @@ impl Ppu {
             if self.generate_nmi {
                 cpu.nmi();
             }
+
+            //This should be done every scanline, but lets see if this works
+            self.oamaddr = 0;
         }
     }
 
@@ -171,13 +247,36 @@ impl Ppu {
         };
         image(tex, c.transform , g);
     }
+
+    pub fn increment_ppuaddr(&mut self) {
+        let addr = ((self.ppuaddr_lo as u16)&0x00FF)
+            + (((self.ppuaddr_hi as u16)&0xFF)<<8);
+        let addr = addr.wrapping_add(1);
+        self.ppuaddr_lo = (addr&0x00FF) as u8;
+        self.ppuaddr_hi = ((addr&0xFF00)>>8) as u8;
+    }
 }
 
 impl Mem for Ppu {
     fn read(&mut self, addr: u16) -> u8 {
         match addr as usize {
             0x0000...0x1FFF => self.chr[addr as usize],
-            0x2000...0x2FFF => self.vram[addr as usize - 0x2000],
+            0x2000...0x23FF => self.vram[addr as usize - 0x2000],
+            0x2400...0x27FF => {
+                if self.horiz_mapping {
+                    self.vram[addr as usize - 0x2400]
+                } else {
+                    self.vram[addr as usize - 0x2000]
+                }
+            },
+            0x2800...0x2BFF => {
+                if self.horiz_mapping {
+                    self.vram[addr as usize - 0x2400]
+                } else {
+                    self.vram[addr as usize - 0x2800]
+                }
+            },
+            0x2C00...0x2FFF => self.vram[addr as usize - 0x2800],
             0x3000...0x3EFF => self.read(mirror_addr(0x2000...0x2FFF, 0x3000...0x3EFF, addr)),
             0x3F00...0x3F1F => self.palate_ram[addr as usize - 0x3F00],
             0x3F20...0x3FFF => self.read(mirror_addr(0x3F20...0x3FFF, 0x3F00...0x3F1F, addr)),
@@ -190,7 +289,22 @@ impl Mem for Ppu {
     fn write(&mut self, addr: u16, val: u8) {
         match addr as usize {
             0x0000...0x1FFF => self.chr[addr as usize] = val,
-            0x2000...0x2FFF => self.vram[addr as usize - 0x2000] = val,
+            0x2000...0x23FF => self.vram[addr as usize - 0x2000] = val,
+            0x2400...0x27FF => {
+                if self.horiz_mapping {
+                    self.vram[addr as usize - 0x2400] = val;
+                } else {
+                    self.vram[addr as usize - 0x2000] = val;
+                }
+            },
+            0x2800...0x2BFF => {
+                if self.horiz_mapping {
+                    self.vram[addr as usize - 0x2400] = val;
+                } else {
+                    self.vram[addr as usize - 0x2800] = val;
+                }
+            },
+            0x2C00...0x2FFF => self.vram[addr as usize - 0x2800] = val,
             0x3000...0x3EFF => self.write(mirror_addr(0x2000...0x2FFF, 0x3000...0x3EFF, addr), val),
             0x3F00...0x3F1F => self.palate_ram[addr as usize - 0x3F00] = val,
             0x3F20...0x3FFF => self.write(mirror_addr(0x3F20...0x3FFF, 0x3F00...0x3F1F, addr), val),

@@ -12,7 +12,9 @@ pub struct Nes {
 
 pub struct Chipset {
     pub mem: MainMemory,
-    pub ppu: Ppu
+    pub ppu: Ppu,
+    ppu_dma_requested: bool,
+    ppu_dma_val: u8,
 }
 
 fn get_line() -> String {
@@ -35,7 +37,9 @@ impl Nes {
             cpu: Cpu::new(mem.read16(0xFFFC)),
             chipset: Chipset {
                 mem: mem,
-                ppu: Ppu::new(chr, horiz_mapping)
+                ppu: Ppu::new(chr, horiz_mapping),
+                ppu_dma_requested: false,
+                ppu_dma_val: 0,
             }
         }
     }
@@ -48,6 +52,12 @@ impl Nes {
         // This is off, but it should be fine (I hope)
         for _ in 0..2 {
             while self.cpu.count < 29780 {
+                if self.chipset.ppu_dma_requested {
+                    self.chipset.ppu_dma_requested = false;
+                    self.chipset.ppu.ppudma(self.chipset.ppu_dma_val,
+                                            &mut self.cpu, &mut self.chipset.mem);
+                }
+
                 self.cpu.tick(&mut self.chipset);
                 self.chipset.ppu.tick(&mut self.cpu);
 
@@ -75,6 +85,7 @@ impl Mem for Chipset {
     fn read(&mut self, addr: u16) -> u8 {
         match addr as usize {
             0x2000 ... 0x2007 => self.ppu.read_main(addr),
+            0x4014 => self.ppu.read_main(addr),
             0x4000 ... 0x4017 => 0 /* apu */,
             _ => self.mem.read(addr)
         }
@@ -83,6 +94,10 @@ impl Mem for Chipset {
     fn write(&mut self, addr: u16, val: u8) {
         match addr as usize {
             0x2000 ... 0x2007 => self.ppu.write_main(addr, val),
+            0x4014 => {
+                self.ppu_dma_requested = true;
+                self.ppu_dma_val = val;
+            },
             0x4000 ... 0x4017 => () /* apu */,
             _ => self.mem.write(addr, val)
         }
