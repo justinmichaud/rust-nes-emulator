@@ -44,7 +44,7 @@ pub struct Ppu {
     sprite_0_hit: bool,
     vertical_blanking: bool,
 
-    texture: Box<Option<G2dTexture>>,
+    texture: Box<Option<(image::ImageBuffer<image::Rgba<u8>, Vec<u8>>, G2dTexture)>>,
     has_blanked: bool,
 }
 
@@ -202,47 +202,73 @@ impl Ppu {
         }
     }
 
+    fn prepare_state(&mut self, window: &mut PistonWindow) {
+        let b: &mut Option<_> = self.texture.borrow_mut();
+        if b.is_none() {
+            let pair = make_texture(32 * 8, 30 * 8, window);
+            *b = Some(pair);
+        }
+    }
+
     pub fn prepare_draw(&mut self, window: &mut PistonWindow) {
-        let sprite = [
-            1,2,2,1,
-            0,1,1,0,
-            0,1,1,0,
-            1,1,1,1
-        ];
+        self.prepare_state(window);
 
-        let mut canvas = image::ImageBuffer::new(4, 4);
-        let mut texture_settings = TextureSettings::new();
-        texture_settings.set_min(Filter::Nearest);
-        texture_settings.set_mag(Filter::Nearest);
-        texture_settings.set_mipmap(Filter::Nearest);
-        let mut texture = Texture::from_image(
-            &mut window.factory,
-            &canvas,
-            &texture_settings
-        ).unwrap();
+        let b: &mut Option<_> = self.texture.borrow_mut();
+        let &mut (ref mut canvas, ref mut texture) = b.as_mut().unwrap();
 
-        for x in 0..4 {
-            for y in 0..4 {
-                let idx = sprite[y*4+x];
-                let colour = match idx {
-                    1 => image::Rgba([0, 255, 0, 255]),
-                    2 => image::Rgba([255, 0, 0, 255]),
-                    _ => image::Rgba([0, 0, 0, 0]),
-                };
-                canvas.put_pixel(x as u32, y as u32, colour);
+        let nametable = match self.nametable {
+            0 => 0x2000,
+            1 => 0x2400,
+            2 => 0x2800,
+            3 => 0x2C00
+        };
+
+        let bg_pattern = match self.backgroundtable {
+            0 => 0x0000,
+            1 => 0x1000
+        };
+
+        for tile_x in 0..32 {
+            for tile_y in 0..30 {
+                let pattern_number = self.read(nametable + tile_x + 30*tile_y);
+
+                let attr_x = tile_x/2;
+                let attr_y = tile_y/2;
+                let over_x = tile_x%2;
+                let over_y = tile_y%2;
+                let attr = self.read(attr_x + 8*attr_y);
+                let mask = 0b00000011 << (4*over_x + 2*over_y);
+                let colour_bits = ((attr&(mask)) >> (4*over_x + 2*over_y))<<2;
+
+                let pattern_addr = bg_pattern + 16*pattern_number;
+                for y in 0..8 {
+                    let lo = self.read(pattern_addr + y);
+                    let hi = self.read(pattern_addr + y + 8);
+
+                    for x in 0..8 {
+                        let mask = 0b00000001<<x;
+                        let palate_idx = colour_bits as u16
+                            + (lo&mask) as u16
+                            + (((hi&mask) as u16)<<8);
+                        let colour = match idx {
+                            1 => image::Rgba([0, 255, 0, 255]),
+                            2 => image::Rgba([255, 0, 0, 255]),
+                            _ => image::Rgba([0, 0, 0, 0]),
+                        };
+                        canvas.put_pixel(x as u32, y as u32, colour);
+                    }
+                }
             }
         }
 
         texture.update(&mut window.encoder, &canvas).unwrap();
-        self.texture = Box::new(Some(texture));
-
         self.has_blanked = false;
     }
 
     pub fn draw(&mut self, c: Context, g: &mut G2d) {
         let c = c.scale(100.,100.);
         let tex = match *self.texture.borrow_mut() {
-            Some(ref mut t) => t,
+            Some((_, ref mut t)) => t,
             _ => panic!()
         };
         image(tex, c.transform , g);
@@ -255,6 +281,23 @@ impl Ppu {
         self.ppuaddr_lo = (addr&0x00FF) as u8;
         self.ppuaddr_hi = ((addr&0xFF00)>>8) as u8;
     }
+}
+
+fn make_texture(width: u32, height: u32, window: &mut PistonWindow)
+    -> (image::ImageBuffer<image::Rgba<u8>, Vec<u8>>, G2dTexture) {
+
+    let canvas = image::ImageBuffer::new(width, height);
+    let mut texture_settings = TextureSettings::new();
+    texture_settings.set_min(Filter::Nearest);
+    texture_settings.set_mag(Filter::Nearest);
+    texture_settings.set_mipmap(Filter::Nearest);
+    let texture = Texture::from_image(
+        &mut window.factory,
+        &canvas,
+        &texture_settings
+    ).unwrap();
+
+    (canvas, texture)
 }
 
 impl Mem for Ppu {
