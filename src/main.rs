@@ -31,10 +31,6 @@ fn emulate((flags, prg, chr) : (Flags, Vec<u8>, Vec<u8>)) {
     let mut last_time = Instant::now();
 
     while let Some(e) = window.next() {
-        if let Some(_) = e.update_args() {
-            nes.tick();
-        }
-
         if let Some(_) = e.render_args() {
             frames += 1;
 
@@ -46,6 +42,7 @@ fn emulate((flags, prg, chr) : (Flags, Vec<u8>, Vec<u8>)) {
                 last_time = Instant::now();
             }
 
+            nes.tick();
             nes.prepare_draw(&mut window);
 
             window.draw_2d(&e, |c, g| {
