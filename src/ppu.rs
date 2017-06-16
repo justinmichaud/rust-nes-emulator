@@ -289,7 +289,7 @@ impl Ppu {
 
         for tile_x in 0..32 {
             for tile_y in 0..30 {
-                let pattern_number = self.read(nametable + tile_x + 30*tile_y);
+                let pattern_number = self.read(nametable + tile_x + 32*tile_y);
 
                 let attr_x = tile_x/2;
                 let attr_y = tile_y/2;
