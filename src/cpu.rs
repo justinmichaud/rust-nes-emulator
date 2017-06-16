@@ -175,7 +175,7 @@ const OPCODES: Map<u8, (ALUOperation, AddressMode)> = phf_map!{
     // Branches
     0x10u8 => (bpl, relative),
     0x30u8 => (bmi, relative),
-    0x40u8 => (bvc, relative),
+    0x50u8 => (bvc, relative),
     0x70u8 => (bvs, relative),
     0x90u8 => (bcc, relative),
     0xB0u8 => (bcs, relative),
@@ -770,7 +770,7 @@ impl Cpu {
             self.nmi_waiting = false;
 
             self.count += 7;
-            let pc = self.pc + 1;
+            let pc = self.pc;
             push16(self, mem, pc);
 
             let interrupt = self.interrupt;
