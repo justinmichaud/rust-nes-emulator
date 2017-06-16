@@ -324,7 +324,7 @@ impl Ppu {
     }
 
     pub fn draw(&mut self, c: Context, g: &mut G2d) {
-        let c = c.scale(100.,100.);
+        let c = c.scale(3.,3.);
         image(&self.texture, c.transform , g);
     }
 
