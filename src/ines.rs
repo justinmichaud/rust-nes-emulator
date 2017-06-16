@@ -37,7 +37,7 @@ pub fn load_file() -> Result<(Flags, Vec<u8>, Vec<u8>)> {
     }
 
     let prg = &contents[16..(16+flags.prg_size)];
-    let chr = &contents[(16+flags.prg_size+1)..(16+flags.prg_size+flags.chr_size)];
+    let chr = &contents[(16+flags.prg_size)..(16+flags.prg_size+flags.chr_size)];
 
     Ok((flags, prg.to_vec(), chr.to_vec()))
 }

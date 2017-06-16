@@ -305,10 +305,10 @@ impl Ppu {
                     let hi = self.read(pattern_addr + y + 8);
 
                     for x in 0..8 {
-                        let mask = 0b00000001<<x;
+                        let mask = 0b00000001<<(7-x);
                         let palate_idx = colour_bits
-                            + ((lo&mask)>>x)
-                            + (((hi&mask)>>x)<<1);
+                            + ((lo&mask)>>(7-x))
+                            + (((hi&mask)>>(7-x))<<1);
 
                         let hsv = self.read(0x3F00 + palate_idx as u16) as usize;
                         let colour = image::Rgba([PALETTE[hsv*3], PALETTE[hsv*3+1], PALETTE[hsv*3+2], 0xFF]);

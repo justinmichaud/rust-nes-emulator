@@ -651,7 +651,7 @@ fn manual(cpu: &mut Cpu, mem: &mut Mem, op: u8) {
         },
         0xF8 => (), //Ignore decimal mode
         0xD8 => (), //Ignore decimal mode
-        _ => panic!("Not implemented yet! Op: {}", op)
+        _ => panic!("Not implemented yet! Op: {:X} at {:X}", op, cpu.pc-1)
     }
 }
 
@@ -675,7 +675,7 @@ fn sty(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
 
 fn push(cpu: &mut Cpu, mem: &mut Mem, val: u8) {
     mem.write((0x01u16<<8) + cpu.s as u16, val);
-    cpu.s = ((cpu.s as u16 - 1)&0xFF) as u8;
+    cpu.s = ((cpu.s as u16).wrapping_sub(1)&0xFF) as u8;
 }
 
 fn push16(cpu: &mut Cpu, mem: &mut Mem, val: u16) {
@@ -766,7 +766,7 @@ impl Cpu {
             println!("State after: {:?}", self);
         }
 
-        if self.nmi_waiting && !self.irq_disable {
+        if self.nmi_waiting {
             self.nmi_waiting = false;
 
             self.count += 7;
@@ -779,7 +779,7 @@ impl Cpu {
             push(self, mem, p);
             self.interrupt = interrupt;
 
-            self.pc = mem.read16(0xFFFE);
+            self.pc = mem.read16(0xFFFA);
             self.irq_disable = true;
         }
     }
