@@ -1,7 +1,7 @@
 CC65 = cc65
 CA65 = ca65
 LD65 = ld65
-NAME = lesson1
+NAME = lesson3
 
 all: clean $(NAME).nes run
 

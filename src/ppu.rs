@@ -75,7 +75,7 @@ static PALETTE: [u8; 192] = [
 pub struct Ppu {
     chr: Vec<u8>,
     vram: [u8; 2*1024],
-    palate_ram: [u8; 32],
+    palette_rame: [u8; 32],
     horiz_mapping: bool,
 
     oamaddr: u8,
@@ -123,7 +123,7 @@ impl Ppu {
             chr: chr,
             vram: [0; 2 * 1024],
             horiz_mapping: horiz_mapping,
-            palate_ram: [0; 32],
+            palette_rame: [0; 32],
 
             oamaddr: 0,
             oam: [0; 256],
@@ -291,13 +291,13 @@ impl Ppu {
             for tile_y in 0..30 {
                 let pattern_number = self.read(nametable + tile_x + 32*tile_y);
 
-                let attr_x = tile_x/2;
-                let attr_y = tile_y/2;
-                let over_x = tile_x%2;
-                let over_y = tile_y%2;
-                let attr = self.read(attr_x + 8*attr_y);
-                let mask = 0b00000011 << (4*over_x + 2*over_y);
-                let colour_bits = ((attr&(mask)) >> (4*over_x + 2*over_y))<<2;
+                let attr_x = tile_x/4;
+                let attr_y = tile_y/4;
+                let over_x = (tile_x/2)%2;
+                let over_y = (tile_y/2)%2;
+                let attr = self.read(nametable + 0x3C0 + attr_x + 8*attr_y);
+                let mask = 0b00000011 << (4*over_y + 2*over_x);
+                let colour_bits = ((attr&(mask)) >> (4*over_y + 2*over_x))<<2;
 
                 let pattern_addr = bg_pattern as u16 + 16*pattern_number as u16;
                 for y in 0..8 {
@@ -306,11 +306,13 @@ impl Ppu {
 
                     for x in 0..8 {
                         let mask = 0b00000001<<(7-x);
-                        let palate_idx = colour_bits
-                            + ((lo&mask)>>(7-x))
+                        let mut palette_idx = ((lo&mask)>>(7-x))
                             + (((hi&mask)>>(7-x))<<1);
+                        if palette_idx != 0 {
+                            palette_idx += colour_bits;
+                        }
 
-                        let hsv = self.read(0x3F00 + palate_idx as u16) as usize;
+                        let hsv = self.read(0x3F00 + palette_idx as u16) as usize;
                         let colour = image::Rgba([PALETTE[hsv*3], PALETTE[hsv*3+1], PALETTE[hsv*3+2], 0xFF]);
 
                         self.canvas.put_pixel((x + tile_x * 8) as u32, (y + tile_y * 8) as u32, colour);
@@ -375,7 +377,11 @@ impl Mem for Ppu {
             },
             0x2C00...0x2FFF => self.vram[addr as usize - 0x2800],
             0x3000...0x3EFF => self.read(mirror_addr(0x2000...0x2FFF, 0x3000...0x3EFF, addr)),
-            0x3F00...0x3F1F => self.palate_ram[addr as usize - 0x3F00],
+            0x3F10 => self.read(0x3F00),
+            0x3F14 => self.read(0x3F04),
+            0x3F18 => self.read(0x3F08),
+            0x3F1C => self.read(0x3F0C),
+            0x3F00...0x3F1F => self.palette_rame[addr as usize - 0x3F00],
             0x3F20...0x3FFF => self.read(mirror_addr(0x3F20...0x3FFF, 0x3F00...0x3F1F, addr)),
             _ => {
                 panic!("Read from invalid ppu address {:X}", addr);
@@ -403,7 +409,11 @@ impl Mem for Ppu {
             },
             0x2C00...0x2FFF => self.vram[addr as usize - 0x2800] = val,
             0x3000...0x3EFF => self.write(mirror_addr(0x2000...0x2FFF, 0x3000...0x3EFF, addr), val),
-            0x3F00...0x3F1F => self.palate_ram[addr as usize - 0x3F00] = val,
+            0x3F10 => self.write(0x3F00, val),
+            0x3F14 => self.write(0x3F04, val),
+            0x3F18 => self.write(0x3F08, val),
+            0x3F1C => self.write(0x3F0C, val),
+            0x3F00...0x3F1F => self.palette_rame[addr as usize - 0x3F00] = val,
             0x3F20...0x3FFF => self.write(mirror_addr(0x3F20...0x3FFF, 0x3F00...0x3F1F, addr), val),
             _ => {
                 panic!("Write to invalid ppu address {:X}", addr);

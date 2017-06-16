@@ -2,11 +2,13 @@
 
 	.import _main
 	.export __STARTUP__:absolute=1
+	.importzp _NMI_flag, _Frame_Count
 
 ; Linker generated symbols
-	.import __STACK_START__, __STACKSIZE__
+	.import __STACK_START__, __STACK_SIZE__
     .include "zeropage.inc"
 	.import initlib, copydata
+
 
 
 .segment "ZEROPAGE"
@@ -66,15 +68,15 @@ Isprites:
 	lda #$02
 	sta $4014
 	
-	jsr ClearNT		;puts zero in all PPU RAM
+	jsr ClearNT
 
 MusicInit:			;turns music channels off
 	lda #0
 	sta $4015
 	
-	lda #<(__STACK_START__+__STACKSIZE__)
+	lda #<(__STACK_START__+__STACK_SIZE__)
     sta	sp
-    lda	#>(__STACK_START__+__STACKSIZE__)
+    lda	#>(__STACK_START__+__STACK_SIZE__)
     sta	sp+1            ; Set the c stack pointer
 	
 	jsr	copydata
@@ -130,6 +132,8 @@ BlankName:		;blanks screen
 
 
 nmi:
+	inc _NMI_flag
+	inc _Frame_Count
 irq:
     rti
 
