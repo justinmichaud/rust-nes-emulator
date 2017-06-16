@@ -4,7 +4,73 @@ use cpu::*;
 use piston_window::*;
 use texture::Filter;
 use image;
-use std::borrow::BorrowMut;
+
+static PALETTE: [u8; 192] = [
+    124,124,124,
+    0,0,252,
+    0,0,188,
+    68,40,188,
+    148,0,132,
+    168,0,32,
+    168,16,0,
+    136,20,0,
+    80,48,0,
+    0,120,0,
+    0,104,0,
+    0,88,0,
+    0,64,88,
+    0,0,0,
+    0,0,0,
+    0,0,0,
+    188,188,188,
+    0,120,248,
+    0,88,248,
+    104,68,252,
+    216,0,204,
+    228,0,88,
+    248,56,0,
+    228,92,16,
+    172,124,0,
+    0,184,0,
+    0,168,0,
+    0,168,68,
+    0,136,136,
+    0,0,0,
+    0,0,0,
+    0,0,0,
+    248,248,248,
+    60,188,252,
+    104,136,252,
+    152,120,248,
+    248,120,248,
+    248,88,152,
+    248,120,88,
+    252,160,68,
+    248,184,0,
+    184,248,24,
+    88,216,84,
+    88,248,152,
+    0,232,216,
+    120,120,120,
+    0,0,0,
+    0,0,0,
+    252,252,252,
+    164,228,252,
+    184,184,248,
+    216,184,248,
+    248,184,248,
+    248,164,192,
+    240,208,176,
+    252,224,168,
+    248,216,120,
+    216,248,120,
+    184,248,184,
+    184,248,216,
+    0,252,252,
+    248,216,248,
+    0,0,0,
+    0,0,0
+];
 
 pub struct Ppu {
     chr: Vec<u8>,
@@ -44,12 +110,15 @@ pub struct Ppu {
     sprite_0_hit: bool,
     vertical_blanking: bool,
 
-    texture: Box<Option<(image::ImageBuffer<image::Rgba<u8>, Vec<u8>>, G2dTexture)>>,
+    texture: G2dTexture,
+    canvas: image::ImageBuffer<image::Rgba<u8>, Vec<u8>>,
     has_blanked: bool,
 }
 
 impl Ppu {
-    pub fn new(chr: Vec<u8>, horiz_mapping: bool) -> Ppu {
+    pub fn new(chr: Vec<u8>, horiz_mapping: bool, window: &mut PistonWindow) -> Ppu {
+        let (canvas, texture) = make_texture(32 * 8, 30 * 8, window);
+
         Ppu {
             chr: chr,
             vram: [0; 2 * 1024],
@@ -88,7 +157,8 @@ impl Ppu {
             sprite_0_hit: false,
             vertical_blanking: false,
 
-            texture: Box::new(None),
+            texture: texture,
+            canvas: canvas,
             has_blanked: false,
         }
     }
@@ -124,10 +194,10 @@ impl Ppu {
         match addr as usize {
             0x2000 => {
                 self.nametable              = val&0b00000011;
-                self.vram_inc               = val&0b00000100;
-                self.spritetable            = val&0b00001000;
-                self.backgroundtable        = val&0b00010000;
-                self.sprite_size            = val&0b00100000;
+                self.vram_inc               = (val&0b00000100)>>2;
+                self.spritetable            = (val&0b00001000)>>3;
+                self.backgroundtable        = (val&0b00010000)>>4;
+                self.sprite_size            = (val&0b00100000)>>5;
                 self.ppu_mss                = val&0b01000000>0;
                 self.generate_nmi           = val&0b10000000>0;
             }
@@ -202,30 +272,19 @@ impl Ppu {
         }
     }
 
-    fn prepare_state(&mut self, window: &mut PistonWindow) {
-        let b: &mut Option<_> = self.texture.borrow_mut();
-        if b.is_none() {
-            let pair = make_texture(32 * 8, 30 * 8, window);
-            *b = Some(pair);
-        }
-    }
-
     pub fn prepare_draw(&mut self, window: &mut PistonWindow) {
-        self.prepare_state(window);
-
-        let b: &mut Option<_> = self.texture.borrow_mut();
-        let &mut (ref mut canvas, ref mut texture) = b.as_mut().unwrap();
-
         let nametable = match self.nametable {
             0 => 0x2000,
             1 => 0x2400,
             2 => 0x2800,
-            3 => 0x2C00
+            3 => 0x2C00,
+            _ => panic!("Name table {} not recognized", self.nametable)
         };
 
         let bg_pattern = match self.backgroundtable {
             0 => 0x0000,
-            1 => 0x1000
+            1 => 0x1000,
+            _ => panic!("Background table {} not recognized", self.backgroundtable)
         };
 
         for tile_x in 0..32 {
@@ -240,38 +299,33 @@ impl Ppu {
                 let mask = 0b00000011 << (4*over_x + 2*over_y);
                 let colour_bits = ((attr&(mask)) >> (4*over_x + 2*over_y))<<2;
 
-                let pattern_addr = bg_pattern + 16*pattern_number;
+                let pattern_addr = bg_pattern as u16 + 16*pattern_number as u16;
                 for y in 0..8 {
                     let lo = self.read(pattern_addr + y);
                     let hi = self.read(pattern_addr + y + 8);
 
                     for x in 0..8 {
                         let mask = 0b00000001<<x;
-                        let palate_idx = colour_bits as u16
-                            + (lo&mask) as u16
-                            + (((hi&mask) as u16)<<8);
-                        let colour = match idx {
-                            1 => image::Rgba([0, 255, 0, 255]),
-                            2 => image::Rgba([255, 0, 0, 255]),
-                            _ => image::Rgba([0, 0, 0, 0]),
-                        };
-                        canvas.put_pixel(x as u32, y as u32, colour);
+                        let palate_idx = colour_bits
+                            + ((lo&mask)>>x)
+                            + (((hi&mask)>>x)<<1);
+
+                        let hsv = self.read(0x3F00 + palate_idx as u16) as usize;
+                        let colour = image::Rgba([PALETTE[hsv*3], PALETTE[hsv*3+1], PALETTE[hsv*3+2], 0xFF]);
+
+                        self.canvas.put_pixel((x + tile_x * 8) as u32, (y + tile_y * 8) as u32, colour);
                     }
                 }
             }
         }
 
-        texture.update(&mut window.encoder, &canvas).unwrap();
+        self.texture.update(&mut window.encoder, &self.canvas).unwrap();
         self.has_blanked = false;
     }
 
     pub fn draw(&mut self, c: Context, g: &mut G2d) {
         let c = c.scale(100.,100.);
-        let tex = match *self.texture.borrow_mut() {
-            Some((_, ref mut t)) => t,
-            _ => panic!()
-        };
-        image(tex, c.transform , g);
+        image(&self.texture, c.transform , g);
     }
 
     pub fn increment_ppuaddr(&mut self) {

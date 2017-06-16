@@ -28,7 +28,8 @@ fn get_line() -> String {
 }
 
 impl Nes {
-    pub fn new(prg: Vec<u8>, chr: Vec<u8>, mapper: u8, prg_ram_size: usize, horiz_mapping: bool) -> Nes {
+    pub fn new(prg: Vec<u8>, chr: Vec<u8>, mapper: u8, prg_ram_size: usize,
+               horiz_mapping: bool, window: &mut PistonWindow) -> Nes {
         assert!(mapper == 0, "Only mapper 0 is supported!");
 
         let mut mem = MainMemory::new(prg, prg_ram_size);
@@ -37,7 +38,7 @@ impl Nes {
             cpu: Cpu::new(mem.read16(0xFFFC)),
             chipset: Chipset {
                 mem: mem,
-                ppu: Ppu::new(chr, horiz_mapping),
+                ppu: Ppu::new(chr, horiz_mapping, window),
                 ppu_dma_requested: false,
                 ppu_dma_val: 0,
             }

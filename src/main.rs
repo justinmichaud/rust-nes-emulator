@@ -22,11 +22,11 @@ use nes::*;
 
 fn emulate((flags, prg, chr) : (Flags, Vec<u8>, Vec<u8>)) {
     println!("Loaded rom with {:?}", flags);
-    let mut nes = Nes::new(prg, chr, flags.mapper, flags.prg_ram_size, flags.horiz_mirroring);
-
     let mut window: PistonWindow =
         WindowSettings::new("Emulator", [256*3, 240*3])
             .exit_on_esc(true).build().unwrap();
+    let mut nes = Nes::new(prg, chr, flags.mapper, flags.prg_ram_size, flags.horiz_mirroring, &mut window);
+
     let mut frames = 0;
     let mut last_time = Instant::now();
 
