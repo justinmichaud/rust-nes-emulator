@@ -110,14 +110,18 @@ pub struct Ppu {
     sprite_0_hit: bool,
     vertical_blanking: bool,
 
-    texture: G2dTexture,
-    canvas: image::ImageBuffer<image::Rgba<u8>, Vec<u8>>,
+    output_texture: G2dTexture,
+    output_canvas: image::ImageBuffer<image::Rgba<u8>, Vec<u8>>,
+    sprite_canvas: image::ImageBuffer<image::Rgba<u8>, Vec<u8>>,
+    sprite_priority: [[bool; 30*8]; 32*8],
     has_blanked: bool,
 }
 
 impl Ppu {
     pub fn new(chr: Vec<u8>, horiz_mapping: bool, window: &mut PistonWindow) -> Ppu {
-        let (canvas, texture) = make_texture(32 * 8, 30 * 8, window);
+        let (out_canvas, out_texture) = make_texture(32 * 8, 30 * 8, window);
+        let sprite_canvas: image::ImageBuffer<image::Rgba<u8>, Vec<u8>>
+            = image::ImageBuffer::new(32 * 8, 30 * 8);
 
         Ppu {
             chr: chr,
@@ -157,8 +161,10 @@ impl Ppu {
             sprite_0_hit: false,
             vertical_blanking: false,
 
-            texture: texture,
-            canvas: canvas,
+            output_texture: out_texture,
+            output_canvas: out_canvas,
+            sprite_canvas: sprite_canvas,
+            sprite_priority: [[false; 30*8]; 32*8],
             has_blanked: false,
         }
     }
@@ -273,6 +279,11 @@ impl Ppu {
     }
 
     pub fn prepare_draw(&mut self, window: &mut PistonWindow) {
+        for (x,y,p) in self.sprite_canvas.enumerate_pixels_mut() {
+            *p = image::Rgba([0,0,0,0]);
+            self.sprite_priority[x as usize][y as usize] = false;
+        }
+
         let nametable = match self.nametable {
             0 => 0x2000,
             1 => 0x2400,
@@ -315,19 +326,85 @@ impl Ppu {
                         let hsv = self.read(0x3F00 + palette_idx as u16) as usize;
                         let colour = image::Rgba([PALETTE[hsv*3], PALETTE[hsv*3+1], PALETTE[hsv*3+2], 0xFF]);
 
-                        self.canvas.put_pixel((x + tile_x * 8) as u32, (y + tile_y * 8) as u32, colour);
+                        self.output_canvas.put_pixel((x + tile_x * 8) as u32, (y + tile_y * 8) as u32, colour);
                     }
                 }
             }
         }
 
-        self.texture.update(&mut window.encoder, &self.canvas).unwrap();
+        for s in 0..64 {
+            let y = self.oam[(self.oamaddr + 4*s) as usize] + 1;
+            if y >= 0xF0 { continue; }
+            if y <= 2 { continue; }
+
+            let (height, table, idx) = if self.sprite_size == 0 {
+                (8, self.spritetable, self.oam[(self.oamaddr + 4*s + 1) as usize])
+            }
+            else if self.sprite_size == 1 {
+                let val = self.oam[(self.oamaddr + 4*s + 1) as usize];
+                (16, val&0b00000001, val&0b11111110)
+            }
+            else { panic!() };
+
+            let pattern_base = match table {
+                0 => 0x0000,
+                1 => 0x1000,
+                _ => panic!()
+            };
+            let pattern_addr = pattern_base + 16*idx as u16;
+            let palette = 0x3F10 + (((self.oam[(self.oamaddr + 4*s + 2) as usize]&0b00000011) as u16)<<2);
+            let priority = self.oam[(self.oamaddr + 4*s + 2) as usize]&0b00100000==0;
+            let fh = self.oam[(self.oamaddr + 4*s + 2) as usize]&0b01000000>0;
+            let fv = self.oam[(self.oamaddr + 4*s + 2) as usize]&0b10000000>0;
+            let x = self.oam[(self.oamaddr + 4*s + 3) as usize];
+
+            for i in 0..(height/8) {
+                for py in 0..8 {
+                    let lo = self.read(pattern_addr + 16*i + py);
+                    let hi = self.read(pattern_addr + 16*i + py + 8);
+
+                    for px in 0..8 {
+                        let real_x = if !fh { x+px } else { x+7-px } as u32;
+                        let real_y = if !fv { y as u32 + (8*i as u32 + py as u32) }
+                            else { y as u32 + 15 - (8*i as u32 + py as u32) };
+
+                        if self.sprite_canvas.get_pixel(real_x, real_y).data != [0,0,0,0] {
+                            continue;
+                        }
+
+                        let mask = 0b00000001<<(7-px);
+                        let palette_idx = ((lo&mask)>>(7-px)) as u16
+                            + (((hi&mask)>>(7-px))<<1) as u16;
+                        if palette_idx == 0 {
+                            continue;
+                        }
+
+                        let hsv = self.read(palette + palette_idx as u16) as usize;
+                        let colour = image::Rgba([PALETTE[hsv*3], PALETTE[hsv*3+1], PALETTE[hsv*3+2], 0xFF]);
+
+                        self.sprite_canvas.put_pixel(real_x, real_y, colour);
+                        self.sprite_priority[real_x as usize][real_y as usize] = priority;
+                    }
+                }
+            }
+        }
+
+
+        for (x,y,p) in self.output_canvas.enumerate_pixels_mut() {
+            let sprite = self.sprite_canvas.get_pixel(x, y);
+
+            if sprite.data[3] > 0 && self.sprite_priority[x as usize][y as usize] {
+                *p = *sprite;
+            }
+        }
+
+        self.output_texture.update(&mut window.encoder, &self.output_canvas).unwrap();
         self.has_blanked = false;
     }
 
     pub fn draw(&mut self, c: Context, g: &mut G2d) {
         let c = c.scale(3.,3.);
-        image(&self.texture, c.transform , g);
+        image(&self.output_texture, c.transform, g);
     }
 
     pub fn increment_ppuaddr(&mut self) {
