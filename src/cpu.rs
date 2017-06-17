@@ -338,11 +338,18 @@ fn implied_y(_: &mut Cpu, _: &mut Mem, _: bool) -> AddressModeResult {
 fn relative(cpu: &mut Cpu, mem: &mut Mem, page_matters: bool) -> AddressModeResult {
     let arg = mem.read(cpu.pc);
     cpu.pc = cpu.pc + 1;
-    if !page_matters || (cpu.pc + 1)/256u16 != (cpu.pc + arg as u16)/256u16 {
+
+    let rel_addr = if arg <= 127 {
+        cpu.pc-2 + arg as u16
+    } else {
+        cpu.pc - (!arg + 1) as u16
+    };
+
+    if !page_matters || cpu.pc/256u16 != rel_addr/256u16 {
         cpu.count = cpu.count + 1;
     }
     cpu.count = cpu.count + 1;
-    Addr((cpu.pc&0xFF00) + ((cpu.pc + arg as u16)&0x00FF))
+    Addr(rel_addr)
 }
 
 fn adc(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
@@ -745,6 +752,7 @@ impl Cpu {
     }
 
     pub fn tick(&mut self, mem: &mut Mem) {
+        //println!("{:X}", self.pc);
         let op = mem.read(self.pc);
         self.pc += 1;
 
@@ -1093,7 +1101,7 @@ mod tests {
         cpu.carry = true;
         mem.write(1, 8);
         beq(&mut cpu, &mut mem, relative);
-        assert_eq!(cpu.pc, 10);
+        assert_eq!(cpu.pc, 8);
         assert_eq!(cpu.count, 3);
     }
 
@@ -1276,5 +1284,19 @@ mod tests {
         manual(&mut cpu, &mut mem, 0x6C); //JMP (indirect)
         assert_eq!(cpu.count, 5);
         assert_eq!(cpu.pc, 0xBEFF);
+    }
+
+    #[test]
+    fn bne_signed_test() {
+        let mut cpu = Cpu::new(0);
+        let mut mem = MainMemory::new(vec![0; 16*1024], 8*1024);
+
+        cpu.pc = 0xC203;
+        cpu.zero = false;
+
+        mem.write16(0xC203, 0xF6);
+        bne(&mut cpu, &mut mem, relative);
+        assert_eq!(cpu.pc, 0xC1FA);
+        assert_eq!(cpu.count, 4);
     }
 }
