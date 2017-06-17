@@ -25,6 +25,7 @@ fn emulate((flags, prg, chr) : (Flags, Vec<u8>, Vec<u8>)) {
     let mut window: PistonWindow =
         WindowSettings::new("Emulator", [256*3, 240*3])
             .exit_on_esc(true).build().unwrap();
+    window.set_max_fps(30);
     let mut nes = Nes::new(prg, chr, flags.mapper, flags.prg_ram_size, flags.horiz_mirroring, &mut window);
 
     let mut frames = 0;
@@ -60,7 +61,7 @@ fn emulate((flags, prg, chr) : (Flags, Vec<u8>, Vec<u8>)) {
 }
 
 fn main() {
-    match load_file("tests/c_playground/lesson6.nes") {
+    match load_file("tests/donkey_kong.nes") {
         Ok(rom) => emulate(rom),
         Err(e) => panic!("Error: {:?}", e)
     }
