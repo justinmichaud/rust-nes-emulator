@@ -810,7 +810,7 @@ mod tests {
 
     fn make_cpu() -> (Cpu, MainMemory) {
         let mut cpu = Cpu::new(0);
-        let mem = MainMemory::new(vec![], 0);
+        let mem = MainMemory::new(vec![], 0, 0);
 
         cpu.a = 0;
         cpu.negative = false;
@@ -1185,7 +1185,7 @@ mod tests {
     #[test]
     fn brk_test() {
         let mut cpu = Cpu::new(0);
-        let mut mem = MainMemory::new(vec![0; 16*1024], 8*1024);
+        let mut mem = MainMemory::new(vec![0; 16*1024], 8*1024, 0);
 
         cpu.s = 0xFF;
         cpu.pc = 11;
@@ -1207,7 +1207,7 @@ mod tests {
     #[test]
     fn brk_rti_test() {
         let mut cpu = Cpu::new(0);
-        let mut mem = MainMemory::new(vec![0; 16*1024], 8*1024);
+        let mut mem = MainMemory::new(vec![0; 16*1024], 8*1024, 0);
 
         cpu.s = 0xFF;
         cpu.pc = 11;
@@ -1295,7 +1295,7 @@ mod tests {
     #[test]
     fn bne_signed_test() {
         let mut cpu = Cpu::new(0);
-        let mut mem = MainMemory::new(vec![0; 16*1024], 8*1024);
+        let mut mem = MainMemory::new(vec![0; 16*1024], 8*1024, 0);
 
         cpu.pc = 0xC203;
         cpu.zero = false;

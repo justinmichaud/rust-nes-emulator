@@ -117,11 +117,6 @@ mod tests {
     fn instr_misc_test_rom_02() {
         instr_misc_test_rom("tests/nes-test-roms/instr_misc/rom_singles/02-branch_wrap.nes")
     }
-
-    #[test]
-    fn instr_misc_test_rom_03() {
-        instr_misc_test_rom("tests/nes-test-roms/instr_misc/rom_singles/03-dummy_reads.nes")
-    }
 }
 
 

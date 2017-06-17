@@ -30,9 +30,7 @@ fn get_line() -> String {
 impl Nes {
     pub fn new(prg: Vec<u8>, chr: Vec<u8>, mapper: u8, prg_ram_size: usize,
                horiz_mapping: bool, window: &mut PistonWindow) -> Nes {
-        assert!(mapper == 0, "Only mapper 0 is supported! ({})", mapper);
-
-        let mut mem = MainMemory::new(prg, prg_ram_size);
+        let mut mem = MainMemory::new(prg, prg_ram_size, mapper);
 
         Nes {
             cpu: Cpu::new(mem.read16(0xFFFC)),

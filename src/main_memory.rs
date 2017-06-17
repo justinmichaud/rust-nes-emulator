@@ -3,7 +3,9 @@ use mem::*;
 pub struct MainMemory {
     prg: Vec<u8>,
     prg_ram: Vec<u8>,
-    ram: [u8; 2 * 1024]
+    ram: [u8; 2 * 1024],
+
+    mapper: u8,
 }
 
 enum MemoryRef {
@@ -14,11 +16,12 @@ enum MemoryRef {
 use self::MemoryRef::*;
 
 impl MainMemory {
-    pub fn new(prg: Vec<u8>, prg_ram_size: usize) -> MainMemory {
+    pub fn new(prg: Vec<u8>, prg_ram_size: usize, mapper: u8) -> MainMemory {
         MainMemory {
             prg: prg,
             prg_ram: vec![0; prg_ram_size],
             ram: [0; 2048],
+            mapper: mapper,
         }
     }
 
@@ -34,6 +37,15 @@ impl MainMemory {
     }
 
     fn mapper_ref(&self, addr: u16) -> MemoryRef {
+        match self.mapper as usize {
+            0 => self.mapper_ref_0(addr),
+            _ => {
+                panic!("Invalid Mapper {}", self.mapper);
+            }
+        }
+    }
+
+    fn mapper_ref_0(&self, addr: u16) -> MemoryRef {
         assert!(self.prg_ram.len() == 8*1024, "PRG ram must be 8kB (for now)");
         assert!(self.prg.len() == 16*1024 || self.prg.len() == 32*1024, "PRG ram must be 16 or 32kb");
 
