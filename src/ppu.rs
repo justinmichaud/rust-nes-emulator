@@ -1,6 +1,7 @@
 use mem::*;
 use cpu::*;
 
+use std::cmp;
 use piston_window::*;
 use texture::Filter;
 use image;
@@ -284,13 +285,9 @@ impl Ppu {
         }
     }
 
-    pub fn prepare_draw(&mut self, window: &mut PistonWindow) {
-        for (x,y,p) in self.sprite_canvas.enumerate_pixels_mut() {
-            *p = image::Rgba([0,0,0,0]);
-            self.sprite_priority[x as usize][y as usize] = false;
-        }
-
-        let nametable = match self.nametable {
+    fn draw_nametable(&mut self, nametable: u8, from_x: u16, from_y: u16,
+                      to_x: u16, to_y: u16, off_x: u16, off_y: u16) {
+        let nametable = match nametable {
             0 => 0x2000,
             1 => 0x2400,
             2 => 0x2800,
@@ -304,8 +301,14 @@ impl Ppu {
             _ => panic!("Background table {} not recognized", self.backgroundtable)
         };
 
-        for tile_x in 0..32 {
-            for tile_y in 0..30 {
+        let region_width = cmp::min((to_x - from_x)/8 + 1, 32);
+        let region_height = cmp::min((to_y - from_y)/8 + 1, 30);
+
+        for ofx in 0..region_width {
+            for ofy in 0..region_height {
+                let tile_x = ofx + off_x/8;
+                let tile_y = ofy + off_y/8;
+
                 let pattern_number = self.read(nametable + tile_x + 32*tile_y);
 
                 let attr_x = tile_x/4;
@@ -333,12 +336,46 @@ impl Ppu {
                         let colour = image::Rgba([PALETTE[hsv*3], PALETTE[hsv*3+1], PALETTE[hsv*3+2], 0xFF]);
 
                         if self.show_background {
-                            self.output_canvas.put_pixel((x + tile_x * 8) as u32, (y + tile_y * 8) as u32, colour);
+                            let real_x = (x as u32 + 8*tile_x as u32 + from_x as u32)
+                                .wrapping_sub(off_x as u32);
+                            let real_y = (y as u32 + 8*tile_y as u32 + from_y as u32)
+                                .wrapping_sub(off_y as u32);
+
+                            if real_x >= self.output_canvas.width()
+                                || real_y >= self.output_canvas.height() {
+                                continue;
+                            }
+
+                            self.output_canvas.put_pixel(real_x, real_y, colour);
                         }
                     }
                 }
             }
         }
+
+    }
+
+    pub fn prepare_draw(&mut self, window: &mut PistonWindow) {
+        for (_,_,p) in self.output_canvas.enumerate_pixels_mut() {
+            *p = image::Rgba([255,255,0,255]);
+        }
+
+        for (x,y,p) in self.sprite_canvas.enumerate_pixels_mut() {
+            *p = image::Rgba([0,0,0,0]);
+            self.sprite_priority[x as usize][y as usize] = false;
+        }
+
+        let w = self.output_canvas.width() as u16;
+        let h = self.output_canvas.height()as u16;
+        let n = self.nametable;
+
+        let sx = self.ppuscroll_x as u16;
+        let sy = self.ppuscroll_y as u16;
+
+        self.draw_nametable(n,       0,0, w-sx, h-sy, sx, sy);
+        self.draw_nametable((n+1)%4, w-sx,0, w, h-sy, 0, sy);
+        self.draw_nametable((n+2)%4, 0,h-sy, w-sx, h, sx, 0);
+        self.draw_nametable((n+3)%4, w-sx,h-sy, w, h, 0, 0);
 
         for s in 0..64 {
             let y = self.oam[self.oamaddr.wrapping_add(4*s) as usize] as usize + 1;
