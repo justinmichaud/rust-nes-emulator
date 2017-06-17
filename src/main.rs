@@ -12,6 +12,7 @@ use std::time::Instant;
 
 mod cpu;
 mod ines;
+mod controller;
 mod nes;
 mod mem;
 mod ppu;
@@ -53,8 +54,31 @@ fn emulate((flags, prg, chr) : (Flags, Vec<u8>, Vec<u8>)) {
         }
 
         if let Some(button) = e.press_args() {
-            if button == Button::Keyboard(Key::D) {
-                nes.cpu.debug = true;
+            match button {
+                Button::Keyboard(Key::D) => nes.cpu.debug = true,
+                Button::Keyboard(Key::Up) => nes.chipset.controller1.up = true,
+                Button::Keyboard(Key::Left) => nes.chipset.controller1.left = true,
+                Button::Keyboard(Key::Down) => nes.chipset.controller1.down = true,
+                Button::Keyboard(Key::Right) => nes.chipset.controller1.right = true,
+                Button::Keyboard(Key::A) => nes.chipset.controller1.a = true,
+                Button::Keyboard(Key::S) => nes.chipset.controller1.b = true,
+                Button::Keyboard(Key::Return) => nes.chipset.controller1.start = true,
+                Button::Keyboard(Key::Space) => nes.chipset.controller1.select = true,
+                _ => ()
+            }
+        }
+
+        if let Some(button) = e.release_args() {
+            match button {
+                Button::Keyboard(Key::Up) => nes.chipset.controller1.up = false,
+                Button::Keyboard(Key::Left) => nes.chipset.controller1.left = false,
+                Button::Keyboard(Key::Down) => nes.chipset.controller1.down = false,
+                Button::Keyboard(Key::Right) => nes.chipset.controller1.right = false,
+                Button::Keyboard(Key::A) => nes.chipset.controller1.a = false,
+                Button::Keyboard(Key::S) => nes.chipset.controller1.b = false,
+                Button::Keyboard(Key::Return) => nes.chipset.controller1.start = false,
+                Button::Keyboard(Key::Space) => nes.chipset.controller1.select = false,
+                _ => ()
             }
         }
     }

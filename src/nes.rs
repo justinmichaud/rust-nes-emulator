@@ -1,5 +1,6 @@
 use cpu::*;
 use mem::*;
+use controller::*;
 use main_memory::*;
 use ppu::*;
 use std::io;
@@ -7,12 +8,15 @@ use piston_window::*;
 
 pub struct Nes {
     pub cpu: Cpu,
-    pub chipset: Chipset
+    pub chipset: Chipset,
 }
 
 pub struct Chipset {
     pub mem: MainMemory,
     pub ppu: Ppu,
+    pub controller1: Controller,
+    pub controller2: Controller,
+
     ppu_dma_requested: bool,
     ppu_dma_val: u8,
 }
@@ -39,7 +43,9 @@ impl Nes {
                 ppu: Ppu::new(chr, horiz_mapping, window),
                 ppu_dma_requested: false,
                 ppu_dma_val: 0,
-            }
+                controller1: Controller::new(),
+                controller2: Controller::new(),
+            },
         }
     }
 
@@ -86,6 +92,8 @@ impl Mem for Chipset {
             0x2000 ... 0x2007 => self.ppu.read_main(addr),
             0x2008...0x3FFF => self.read(mirror_addr(0x2000...0x2007, 0x2008...0x3FFF, addr)),
             0x4014 => self.ppu.read_main(addr),
+            0x4016 => self.controller1.read(addr),
+            0x4017 => self.controller2.read(addr),
             0x4000 ... 0x4017 => 0 /* apu */,
             _ => self.mem.read(addr)
         }
@@ -98,6 +106,10 @@ impl Mem for Chipset {
             0x4014 => {
                 self.ppu_dma_requested = true;
                 self.ppu_dma_val = val;
+            },
+            0x4016 => {
+                self.controller1.write(addr, val);
+                self.controller2.write(addr, val);
             },
             0x4000 ... 0x4017 => () /* apu */,
             _ => self.mem.write(addr, val)
