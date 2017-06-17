@@ -375,8 +375,21 @@ impl Ppu {
                     let hi = self.read(pattern_addr + 16*i + py + 8);
 
                     for px in 0..8 {
-                        let real_x = if !fh { x + px } else { x + 7 - px } as u32;
-                        let real_y = if !fv { y as u32 + (8 * i as u32 + py as u32) } else { y as u32 + 15 - (8 * i as u32 + py as u32) };
+                        let real_x = if !fh {
+                            x as u32 + px as u32
+                        } else {
+                            x as u32 + 7 - px as u32
+                        };
+                        let real_y = if !fv {
+                            y as u32 + (8 * i as u32 + py as u32)
+                        } else {
+                            y as u32 + 15 - (8 * i as u32 + py as u32)
+                        };
+
+                        if real_x >= self.sprite_canvas.width()
+                            || real_y >= self.sprite_canvas.height() {
+                            continue;
+                        }
 
                         if self.sprite_canvas.get_pixel(real_x, real_y).data != [0, 0, 0, 0] {
                             continue;
