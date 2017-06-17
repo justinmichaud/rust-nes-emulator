@@ -285,20 +285,26 @@ fn absolute_x(cpu: &mut Cpu, mem: &mut Mem, page_matters: bool) -> AddressModeRe
     let arg = mem.read16(cpu.pc);
     cpu.pc += 2;
     cpu.count += 4;
-    if !page_matters || (arg as u16 + cpu.x as u16)/256u16 != arg as u16 / 256u16 {
+
+    let addr = arg.wrapping_add(cpu.x as u16);
+
+    if !page_matters || addr/256u16 != arg / 256u16 {
         cpu.count += 1;
     }
-    Addr(arg + cpu.x as u16)
+    Addr(addr)
 }
 
 fn absolute_y(cpu: &mut Cpu, mem: &mut Mem, page_matters: bool) -> AddressModeResult {
     let arg = mem.read16(cpu.pc);
     cpu.pc += 2;
     cpu.count += 4;
-    if !page_matters || (arg as u16 + cpu.y as u16)/256u16 != arg as u16/256u16 {
+
+    let addr = arg.wrapping_add(cpu.y as u16);
+
+    if !page_matters || addr/256u16 != arg /256u16 {
         cpu.count += 1;
     }
-    Addr(arg + cpu.y as u16)
+    Addr(addr)
 }
 
 fn indirect_x(cpu: &mut Cpu, mem: &mut Mem, _: bool) -> AddressModeResult {
@@ -340,9 +346,9 @@ fn relative(cpu: &mut Cpu, mem: &mut Mem, page_matters: bool) -> AddressModeResu
     cpu.pc = cpu.pc + 1;
 
     let rel_addr = if arg <= 127 {
-        cpu.pc-2 + arg as u16
+        cpu.pc.wrapping_add(arg as u16)
     } else {
-        cpu.pc - (!arg + 1) as u16
+        cpu.pc.wrapping_sub((!arg + 1) as u16)
     };
 
     if !page_matters || cpu.pc/256u16 != rel_addr/256u16 {
@@ -1101,7 +1107,7 @@ mod tests {
         cpu.carry = true;
         mem.write(1, 8);
         beq(&mut cpu, &mut mem, relative);
-        assert_eq!(cpu.pc, 8);
+        assert_eq!(cpu.pc, 10);
         assert_eq!(cpu.count, 3);
     }
 

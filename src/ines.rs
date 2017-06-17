@@ -15,8 +15,8 @@ pub struct Flags {
     i_nes: bool
 }
 
-pub fn load_file() -> Result<(Flags, Vec<u8>, Vec<u8>)> {
-    let file = File::open("tests/c_playground/lesson4.nes")?;
+pub fn load_file(file: &str) -> Result<(Flags, Vec<u8>, Vec<u8>)> {
+    let file = File::open(file)?;
     let mut buf_reader = BufReader::new(file);
     let mut contents = vec![];
     buf_reader.read_to_end(&mut contents)?;

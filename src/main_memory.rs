@@ -26,7 +26,6 @@ impl MainMemory {
         match addr as usize {
             0...0x07FF => Ram(addr as usize),
             0x0800...0x1FFF => self.mem_ref(mirror_addr(0...0x07FF, 0x0800...0x1FFF, addr)),
-            0x2008...0x3FFF => self.mem_ref(mirror_addr(0x2000...0x2007, 0x2008...0x3FFF, addr)),
             0x4020...0xFFFF => self.mapper_ref(addr),
             _ => {
                 panic!("Reference to invalid main memory address {:X}", addr);

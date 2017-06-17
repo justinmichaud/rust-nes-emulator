@@ -220,7 +220,7 @@ impl Ppu {
             0x2003 => self.oamaddr = val,
             0x2004 => {
                 self.oam[self.oamaddr as usize] = val;
-                self.oamaddr += 1;
+                self.oamaddr = self.oamaddr.wrapping_add(1);
             },
             0x2005 => {
                 if self.ppuscroll_pick {
@@ -341,15 +341,15 @@ impl Ppu {
         }
 
         for s in 0..64 {
-            let y = self.oam[(self.oamaddr + 4*s) as usize] + 1;
+            let y = self.oam[self.oamaddr.wrapping_add(4*s) as usize] as usize + 1;
             if y >= 0xF0 { continue; }
             if y <= 2 { continue; }
 
             let (height, table, idx) = if self.sprite_size == 0 {
-                (8, self.spritetable, self.oam[(self.oamaddr + 4*s + 1) as usize])
+                (8, self.spritetable, self.oam[self.oamaddr.wrapping_add(4*s + 1) as usize])
             }
             else if self.sprite_size == 1 {
-                let val = self.oam[(self.oamaddr + 4*s + 1) as usize];
+                let val = self.oam[self.oamaddr.wrapping_add(4*s + 1) as usize];
                 (16, val&0b00000001, val&0b11111110)
             }
             else { panic!() };
@@ -360,11 +360,14 @@ impl Ppu {
                 _ => panic!()
             };
             let pattern_addr = pattern_base + 16*idx as u16;
-            let palette = 0x3F10 + (((self.oam[(self.oamaddr + 4*s + 2) as usize]&0b00000011) as u16)<<2);
-            let priority = self.oam[(self.oamaddr + 4*s + 2) as usize]&0b00100000==0;
-            let fh = self.oam[(self.oamaddr + 4*s + 2) as usize]&0b01000000>0;
-            let fv = self.oam[(self.oamaddr + 4*s + 2) as usize]&0b10000000>0;
-            let x = self.oam[(self.oamaddr + 4*s + 3) as usize];
+
+            let flags = self.oam[self.oamaddr.wrapping_add(4*s + 2) as usize];
+            let palette = 0x3F10 + (((flags&0b00000011) as u16)<<2);
+            let priority = flags&0b00100000==0;
+            let fh = flags&0b01000000>0;
+            let fv = flags&0b10000000>0;
+
+            let x = self.oam[self.oamaddr.wrapping_add(4*s + 3) as usize];
 
             for i in 0..(height/8) {
                 for py in 0..8 {
