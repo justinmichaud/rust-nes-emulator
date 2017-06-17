@@ -265,8 +265,14 @@ impl Ppu {
     }
 
     pub fn tick(&mut self, cpu: &mut Cpu) {
-        // 231 * 341 / 3 (rough estimate)
-        if cpu.count > 27393 && !self.has_blanked {
+        let blank_begin = 27393; // 231 * 341 / 3 (rough estimate)
+        let blank_end = 0;
+
+        if cpu.count > blank_end && cpu.count < blank_begin {
+            self.has_blanked = false;
+            self.vertical_blanking = false;
+        }
+        else if cpu.count > blank_begin && !self.has_blanked {
             self.has_blanked = true;
             self.vertical_blanking = true;
             if self.generate_nmi {
@@ -326,7 +332,9 @@ impl Ppu {
                         let hsv = self.read(0x3F00 + palette_idx as u16) as usize;
                         let colour = image::Rgba([PALETTE[hsv*3], PALETTE[hsv*3+1], PALETTE[hsv*3+2], 0xFF]);
 
-                        self.output_canvas.put_pixel((x + tile_x * 8) as u32, (y + tile_y * 8) as u32, colour);
+                        if self.show_background {
+                            self.output_canvas.put_pixel((x + tile_x * 8) as u32, (y + tile_y * 8) as u32, colour);
+                        }
                     }
                 }
             }
@@ -364,26 +372,27 @@ impl Ppu {
                     let hi = self.read(pattern_addr + 16*i + py + 8);
 
                     for px in 0..8 {
-                        let real_x = if !fh { x+px } else { x+7-px } as u32;
-                        let real_y = if !fv { y as u32 + (8*i as u32 + py as u32) }
-                            else { y as u32 + 15 - (8*i as u32 + py as u32) };
+                        let real_x = if !fh { x + px } else { x + 7 - px } as u32;
+                        let real_y = if !fv { y as u32 + (8 * i as u32 + py as u32) } else { y as u32 + 15 - (8 * i as u32 + py as u32) };
 
-                        if self.sprite_canvas.get_pixel(real_x, real_y).data != [0,0,0,0] {
+                        if self.sprite_canvas.get_pixel(real_x, real_y).data != [0, 0, 0, 0] {
                             continue;
                         }
 
-                        let mask = 0b00000001<<(7-px);
-                        let palette_idx = ((lo&mask)>>(7-px)) as u16
-                            + (((hi&mask)>>(7-px))<<1) as u16;
+                        let mask = 0b00000001 << (7 - px);
+                        let palette_idx = ((lo & mask) >> (7 - px)) as u16
+                            + (((hi & mask) >> (7 - px)) << 1) as u16;
                         if palette_idx == 0 {
                             continue;
                         }
 
                         let hsv = self.read(palette + palette_idx as u16) as usize;
-                        let colour = image::Rgba([PALETTE[hsv*3], PALETTE[hsv*3+1], PALETTE[hsv*3+2], 0xFF]);
+                        let colour = image::Rgba([PALETTE[hsv * 3], PALETTE[hsv * 3 + 1], PALETTE[hsv * 3 + 2], 0xFF]);
 
-                        self.sprite_canvas.put_pixel(real_x, real_y, colour);
-                        self.sprite_priority[real_x as usize][real_y as usize] = priority;
+                        if self.show_sprites {
+                            self.sprite_canvas.put_pixel(real_x, real_y, colour);
+                            self.sprite_priority[real_x as usize][real_y as usize] = priority;
+                        }
                     }
                 }
             }
@@ -399,7 +408,6 @@ impl Ppu {
         }
 
         self.output_texture.update(&mut window.encoder, &self.output_canvas).unwrap();
-        self.has_blanked = false;
     }
 
     pub fn draw(&mut self, c: Context, g: &mut G2d) {
