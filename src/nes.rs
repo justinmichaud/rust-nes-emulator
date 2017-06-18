@@ -32,9 +32,13 @@ fn get_line() -> String {
 }
 
 impl Nes {
-    pub fn new(prg: Vec<u8>, chr: Vec<u8>, mapper: u8, prg_ram_size: usize,
+    pub fn new(prg: Vec<u8>, mut chr: Vec<u8>, mapper: u8, prg_ram_size: usize,
                horiz_mapping: bool, window: &mut PistonWindow) -> Nes {
         let mut mem = MainMemory::new(prg, prg_ram_size, mapper);
+
+        if chr.len() == 0 {
+            chr = vec![0; 8*1024];
+        }
 
         Nes {
             cpu: Cpu::new(mem.read16(0xFFFC)),

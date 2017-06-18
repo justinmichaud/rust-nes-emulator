@@ -141,6 +141,11 @@ mod tests {
     fn instr_misc_test_rom_02() {
         instr_misc_test_rom("tests/nes-test-roms/instr_misc/rom_singles/02-branch_wrap.nes")
     }
+
+    #[test]
+    fn instr_misc_official() {
+        instr_misc_test_rom("tests/nes-test-roms/ppu_sprite_hit/ppu_sprite_hit.nes")
+    }
 }
 
 
