@@ -73,6 +73,22 @@ static PALETTE: [u8; 192] = [
     0,0,0
 ];
 
+struct MidframeState {
+    count: u32,
+
+    nametable: u8,
+    ppuscroll_x: u8,
+    ppuscroll_y: u8,
+
+    spritetable: u8,
+    backgroundtable: u8,
+    sprite_size: u8,
+
+    greyscale: bool,
+    show_background: bool,
+    show_sprites: bool,
+}
+
 pub struct Ppu {
     chr: Vec<u8>,
     vram: [u8; 2*1024],
@@ -116,6 +132,8 @@ pub struct Ppu {
     sprite_canvas: image::ImageBuffer<image::Rgba<u8>, Vec<u8>>,
     sprite_priority: [[bool; 30*8]; 32*8],
     has_blanked: bool,
+
+    states: Vec<MidframeState>,
 }
 
 impl Ppu {
@@ -167,7 +185,29 @@ impl Ppu {
             sprite_canvas: sprite_canvas,
             sprite_priority: [[false; 30*8]; 32*8],
             has_blanked: false,
+
+            states: vec![],
         }
+    }
+
+    fn make_midframe_state(&self, count: u32) -> MidframeState {
+        MidframeState {
+            count: count,
+            nametable: self.nametable,
+            ppuscroll_x: self.ppuscroll_x,
+            ppuscroll_y: self.ppuscroll_y,
+            spritetable: self.spritetable,
+            backgroundtable: self.backgroundtable,
+            sprite_size: self.sprite_size,
+            greyscale: self.greyscale,
+            show_background: self.show_background,
+            show_sprites: self.show_sprites,
+        }
+    }
+
+    pub fn push_state(&mut self, cpu: &Cpu) {
+        let state = self.make_midframe_state(cpu.count);
+        self.states.push(state);
     }
 
     pub fn read_main(&mut self, addr: u16) -> u8 {
@@ -197,7 +237,7 @@ impl Ppu {
         }
     }
 
-    pub fn write_main(&mut self, addr: u16, val: u8) {
+    pub fn write_main(&mut self, addr: u16, val: u8, cpu: &Cpu) {
         match addr as usize {
             0x2000 => {
                 self.nametable              = val&0b00000011;
@@ -207,6 +247,7 @@ impl Ppu {
                 self.sprite_size            = (val&0b00100000)>>5;
                 self.ppu_mss                = val&0b01000000>0;
                 self.generate_nmi           = val&0b10000000>0;
+                self.push_state(cpu);
             }
             0x2001 => {
                 self.greyscale              = val&0b00000001>0;
@@ -217,6 +258,7 @@ impl Ppu {
                 self.em_red                 = val&0b00100000>0;
                 self.em_green               = val&0b01000000>0;
                 self.em_blue                = val&0b10000000>0;
+                self.push_state(cpu);
             }
             0x2003 => self.oamaddr = val,
             0x2004 => {
@@ -229,6 +271,7 @@ impl Ppu {
                 }
                 else {
                     self.ppuscroll_x = val;
+                    self.push_state(cpu);
                 }
                 self.ppuscroll_pick = !self.ppuscroll_pick;
             },
@@ -277,14 +320,17 @@ impl Ppu {
             }
         }
 
-        if y > 21 {
+        if y > 21 && self.has_blanked {
             self.has_blanked = false;
             self.vertical_blanking = false;
+
+            self.states.clear();
+            self.push_state(cpu);
         }
 
         let sprite_0_y = self.oam[self.oamaddr as usize] as u32 + 1;
         if y >= sprite_0_y + 21 && y < sprite_0_y + 21 + 8 {
-            let (_,_,_, pattern_addr, _, _, _, _) = self.get_sprite_attrs(0);
+            let (_,_,_, pattern_addr, _, _, _, _) = self.get_sprite_attrs(0, 0);
 
             for py in 0..8 {
                 // Who cares about 16px sprites!
@@ -309,19 +355,20 @@ impl Ppu {
     }
 
     fn draw_nametable(&mut self, nametable: u8, from_x: u16, from_y: u16,
-                      to_x: u16, to_y: u16, off_x: u16, off_y: u16) {
+                      to_x: u16, to_y: u16, off_x: u16, off_y: u16, state_idx: usize,
+                      start_y: u16, end_y: u16) {
         let nametable = match nametable {
             0 => 0x2000,
             1 => 0x2400,
             2 => 0x2800,
             3 => 0x2C00,
-            _ => panic!("Name table {} not recognized", self.nametable)
+            _ => panic!("Name table {} not recognized", nametable)
         };
 
-        let bg_pattern = match self.backgroundtable {
+        let bg_pattern = match self.states[state_idx].backgroundtable {
             0 => 0x0000,
             1 => 0x1000,
-            _ => panic!("Background table {} not recognized", self.backgroundtable)
+            _ => panic!("Background table {} not recognized", self.states[state_idx].backgroundtable)
         };
 
         let region_width = cmp::min((to_x - from_x)/8 + 1, 32);
@@ -355,21 +402,23 @@ impl Ppu {
                             palette_idx += colour_bits;
                         }
 
-                        let mask = if self.greyscale { 0x30 } else { 0xFF };
+                        let mask = if self.states[state_idx].greyscale { 0x30 } else { 0xFF };
                         let hsv = (self.read(0x3F00 + palette_idx as u16)&mask) as usize;
                         let opacity = if palette_idx == 0 { 0xFE } else { 0xFF }; // Hack to store if this part of the background is "transparent"
                         let colour = image::Rgba([PALETTE[hsv*3],
                             PALETTE[hsv*3+1],
                             PALETTE[hsv*3+2], opacity]);
 
-                        if self.show_background {
+                        if self.states[state_idx].show_background {
                             let real_x = (x as u32 + 8*tile_x as u32 + from_x as u32)
                                 .wrapping_sub(off_x as u32);
                             let real_y = (y as u32 + 8*tile_y as u32 + from_y as u32)
                                 .wrapping_sub(off_y as u32);
 
                             if real_x >= self.output_canvas.width()
-                                || real_y >= self.output_canvas.height() {
+                                || real_y >= self.output_canvas.height()
+                                || real_y < start_y as u32
+                                || real_y > end_y as u32 {
                                 continue;
                             }
 
@@ -379,15 +428,16 @@ impl Ppu {
                 }
             }
         }
-
     }
 
-    fn get_sprite_attrs(&self, s: u8) -> (u8, u16, u8, u16, u16, bool, bool, bool) {
+    fn get_sprite_attrs(&self, s: u8, state_idx: usize) -> (u8, u16, u8, u16, u16, bool, bool, bool) {
+        let state = &self.states[state_idx];
+
         let y = self.oam[self.oamaddr.wrapping_add(4*s) as usize] as u16 + 1;
 
-        let (height, table, idx) = if self.sprite_size == 0 {
-            (8, self.spritetable, self.oam[self.oamaddr.wrapping_add(4*s + 1) as usize])
-        } else if self.sprite_size == 1 {
+        let (height, table, idx) = if state.sprite_size == 0 {
+            (8, state.spritetable, self.oam[self.oamaddr.wrapping_add(4*s + 1) as usize])
+        } else if state.sprite_size == 1 {
             let val = self.oam[self.oamaddr.wrapping_add(4*s + 1) as usize];
             (16, val&0b00000001, val&0b11111110)
         } else { panic!() };
@@ -410,32 +460,25 @@ impl Ppu {
         (x, y, height, pattern_addr, palette, priority, fh, fv)
     }
 
-    pub fn prepare_draw(&mut self, window: &mut PistonWindow) {
-        for (_,_,p) in self.output_canvas.enumerate_pixels_mut() {
-            *p = image::Rgba([255,255,0,255]);
-        }
-
-        for (x,y,p) in self.sprite_canvas.enumerate_pixels_mut() {
-            *p = image::Rgba([0,0,0,0]);
-            self.sprite_priority[x as usize][y as usize] = false;
-        }
-
+    fn draw_with_state(&mut self, state_idx: usize, start_y: u16, end_y: u16) {
         let w = self.output_canvas.width() as u16;
         let h = self.output_canvas.height()as u16;
-        let n = self.nametable;
+        let n = self.states[state_idx].nametable;
 
-        let sx = self.ppuscroll_x as u16;
-        let sy = self.ppuscroll_y as u16;
+        let sx = self.states[state_idx].ppuscroll_x as u16;
+        let sy = self.states[state_idx].ppuscroll_y as u16;
 
-        self.draw_nametable(n,       0,0, w-sx, h-sy, sx, sy);
-        self.draw_nametable((n+1)%4, w-sx,0, w, h-sy, 0, sy);
-        self.draw_nametable((n+2)%4, 0,h-sy, w-sx, h, sx, 0);
-        self.draw_nametable((n+3)%4, w-sx,h-sy, w, h, 0, 0);
+        self.draw_nametable(n,       0,0, w-sx, h-sy, sx, sy, state_idx, start_y, end_y);
+        self.draw_nametable((n+1)%4, w-sx,0, w, h-sy, 0, sy, state_idx, start_y, end_y);
+        self.draw_nametable((n+2)%4, 0,h-sy, w-sx, h, sx, 0, state_idx, start_y, end_y);
+        self.draw_nametable((n+3)%4, w-sx,h-sy, w, h, 0, 0, state_idx, start_y, end_y);
 
         for s in 0..64 {
-            let (x,  y, height, pattern_addr, palette, priority, fh, fv) = self.get_sprite_attrs(s);
+            let (x,  y, height, pattern_addr, palette, priority, fh, fv) = self.get_sprite_attrs(s, state_idx);
             if y >= 0xF0 { continue; }
             if y <= 2 { continue; }
+            if y > end_y { continue; }
+            if y + (height as u16) < start_y { continue; }
 
             for i in 0..(height/8) {
                 for py in 0..8 {
@@ -455,7 +498,8 @@ impl Ppu {
                         };
 
                         if real_x >= self.sprite_canvas.width()
-                            || real_y >= self.sprite_canvas.height() {
+                            || real_y > end_y as u32
+                            || real_y < start_y as u32 {
                             continue;
                         }
 
@@ -473,7 +517,7 @@ impl Ppu {
                         let hsv = self.read(palette + palette_idx as u16) as usize;
                         let colour = image::Rgba([PALETTE[hsv * 3], PALETTE[hsv * 3 + 1], PALETTE[hsv * 3 + 2], 0xFF]);
 
-                        if self.show_sprites {
+                        if self.states[state_idx].show_sprites {
                             self.sprite_canvas.put_pixel(real_x, real_y, colour);
                             self.sprite_priority[real_x as usize][real_y as usize] = priority;
                         }
@@ -489,6 +533,29 @@ impl Ppu {
             if sprite.data[3] > 0 && self.sprite_priority[x as usize][y as usize] {
                 *p = *sprite;
             }
+        }
+    }
+
+    pub fn prepare_draw(&mut self, window: &mut PistonWindow) {
+        for (_,_,p) in self.output_canvas.enumerate_pixels_mut() {
+            *p = image::Rgba([255,255,0,255]);
+        }
+
+        for (x,y,p) in self.sprite_canvas.enumerate_pixels_mut() {
+            *p = image::Rgba([0,0,0,0]);
+            self.sprite_priority[x as usize][y as usize] = false;
+        }
+
+        for i in 0..self.states.len() {
+            let start_y = (self.states[i].count*3/341) as u16 - 22;
+            let end_y = if i < self.states.len()-1 {
+                (self.states[i+1].count*3/341) as u16 - 22
+            } else {
+                self.output_canvas.height() as u16
+            };
+            if end_y < start_y { continue; }
+
+            self.draw_with_state(i, start_y, end_y-1);
         }
 
         self.output_texture.update(&mut window.encoder, &self.output_canvas).unwrap();

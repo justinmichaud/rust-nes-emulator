@@ -19,6 +19,8 @@ pub struct Chipset {
 
     ppu_dma_requested: bool,
     ppu_dma_val: u8,
+
+    ppu_writes_requested: Vec<(u16, u8)>,
 }
 
 fn get_line() -> String {
@@ -49,6 +51,8 @@ impl Nes {
                 ppu_dma_val: 0,
                 controller1: Controller::new(),
                 controller2: Controller::new(),
+
+                ppu_writes_requested: vec![],
             },
         }
     }
@@ -60,6 +64,13 @@ impl Nes {
                     self.chipset.ppu_dma_requested = false;
                     self.chipset.ppu.ppudma(self.chipset.ppu_dma_val,
                                             &mut self.cpu, &mut self.chipset.mem);
+                }
+
+                if self.chipset.ppu_writes_requested.len() > 0 {
+                    for &(addr, val) in &self.chipset.ppu_writes_requested {
+                        self.chipset.ppu.write_main(addr, val, &self.cpu);
+                    }
+                    self.chipset.ppu_writes_requested.clear();
                 }
 
                 self.cpu.tick(&mut self.chipset);
@@ -100,7 +111,9 @@ impl Mem for Chipset {
 
     fn write(&mut self, addr: u16, val: u8) {
         match addr as usize {
-            0x2000 ... 0x2007 => self.ppu.write_main(addr, val),
+            0x2000 ... 0x2007 => {
+                self.ppu_writes_requested.push((addr, val));
+            },
             0x2008...0x3FFF => self.write(mirror_addr(0x2000...0x2007, 0x2008...0x3FFF, addr), val),
             0x4014 => {
                 self.ppu_dma_requested = true;
