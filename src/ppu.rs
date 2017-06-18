@@ -134,6 +134,7 @@ pub struct Ppu {
     has_blanked: bool,
 
     states: Vec<MidframeState>,
+    has_drawn_sprite0_background: bool,
 }
 
 impl Ppu {
@@ -187,6 +188,7 @@ impl Ppu {
             has_blanked: false,
 
             states: vec![],
+            has_drawn_sprite0_background: false,
         }
     }
 
@@ -309,46 +311,61 @@ impl Ppu {
     }
 
     pub fn tick(&mut self, cpu: &mut Cpu) {
-        let y = cpu.count*3/341; // y + 21 unrendered lines
+        let y = cpu.count*3/341;
 
-        if y <= 21 && !self.has_blanked {
+        if y < 21 && !self.has_blanked {
             self.has_blanked = true;
             self.vertical_blanking = true;
             self.oamaddr = 0;
+
             if self.generate_nmi {
                 cpu.nmi();
             }
         }
 
-        if y > 21 && self.has_blanked {
+        if y >= 21 && self.has_blanked {
             self.has_blanked = false;
             self.vertical_blanking = false;
+            self.has_drawn_sprite0_background = false;
 
             self.states.clear();
             self.push_state(cpu);
         }
 
         let sprite_0_y = self.oam[self.oamaddr as usize] as u32 + 1;
-        if y >= sprite_0_y + 21 && y < sprite_0_y + 21 + 8 {
-            let (_,_,_, pattern_addr, _, _, _, _) = self.get_sprite_attrs(0, 0);
+        if self.show_sprites && self.show_background &&
+                y >= sprite_0_y + 22 && y < sprite_0_y + 22 + 8 {
+            let idx = self.states.len()-1;
+            let (sprite_0_x,_,_, pattern_addr, _, _, _, _) = self.get_sprite_attrs(0, idx);
 
-            for py in 0..8 {
-                // Who cares about 16px sprites!
-                let lo = self.read(pattern_addr + py);
-                let hi = self.read(pattern_addr + py + 8);
+            if !self.has_drawn_sprite0_background {
+                self.has_drawn_sprite0_background = true;
 
-                for px in 0..8 {
-                    let mask = 0b00000001<<(7-px);
-                    let solid = (((lo&mask)>>(7-px))
-                        + (((hi&mask)>>(7-px))<<1)) != 0;
+                // This could be more efficient, but what the hell
+                self.show_sprites = false;
+                self.draw_with_state(idx, sprite_0_y as u16, sprite_0_y as u16 + 8);
+                self.show_sprites = true;
+            }
 
-                    if !solid { continue; }
+            let py = y as u16 - sprite_0_y as u16  - 22;
 
-                    // I should check if the background isn't transparent, but I am going to wait
-                    // until it becomes a problem
-                    self.sprite_0_hit = true;
-                    return;
+            // Who cares about 16px sprites!
+            let lo = self.read(pattern_addr + py);
+            let hi = self.read(pattern_addr + py + 8);
+
+            for px in 0..8 {
+                let mask = 0b00000001<<(7-px);
+                let solid = (((lo&mask)>>(7-px))
+                    + (((hi&mask)>>(7-px))<<1)) != 0;
+
+                if !solid { continue; }
+                if self.output_canvas.get_pixel(sprite_0_x as u32 + px as u32, sprite_0_y as u32 + py as u32)
+                    .data[3] < 0xFF {
+                    continue; //Hack to check for transparency - This could use a refactoring
                 }
+
+                self.sprite_0_hit = true;
+                return;
             }
         }
         self.sprite_0_hit = false;
@@ -547,9 +564,9 @@ impl Ppu {
         }
 
         for i in 0..self.states.len() {
-            let start_y = (self.states[i].count*3/341) as u16 - 22;
+            let start_y = (self.states[i].count*3/341) as u16 - 21;
             let end_y = if i < self.states.len()-1 {
-                (self.states[i+1].count*3/341) as u16 - 22
+                (self.states[i+1].count*3/341) as u16 - 21
             } else {
                 self.output_canvas.height() as u16
             };
