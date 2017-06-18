@@ -102,11 +102,10 @@ pub struct Ppu {
 
     ppuscroll_x: u8,
     ppuscroll_y: u8,
-    ppuscroll_pick: bool,
+    ppuscroll_ppuaddr_pick: bool,
 
     ppuaddr_hi: u8,
     ppuaddr_lo: u8,
-    ppuaddr_pick: bool,
 
     nametable: u8, //0 = $2000; 1 = $2400; 2 = $2800; 3 = $2C00
     vram_inc: u8, //0=+1 across, 1=+32 down
@@ -156,11 +155,10 @@ impl Ppu {
 
             ppuscroll_x: 0,
             ppuscroll_y: 0,
-            ppuscroll_pick: false,
+            ppuscroll_ppuaddr_pick: false,
 
             ppuaddr_hi: 0,
             ppuaddr_lo: 0,
-            ppuaddr_pick: false,
 
             nametable: 0,
             vram_inc: 0,
@@ -221,9 +219,7 @@ impl Ppu {
             0x2002 => {
                 let blanking = self.vertical_blanking;
                 self.vertical_blanking = false;
-
-                self.ppuscroll_pick = false;
-                self.ppuaddr_pick = false;
+                self.ppuscroll_ppuaddr_pick = false;
 
                 ((blanking as u8)<<7)
                     + ((self.sprite_0_hit as u8)<<6)
@@ -272,23 +268,23 @@ impl Ppu {
                 self.oamaddr = self.oamaddr.wrapping_add(1);
             },
             0x2005 => {
-                if self.ppuscroll_pick {
+                if self.ppuscroll_ppuaddr_pick {
                     self.ppuscroll_y = val;
                 }
                 else {
                     self.ppuscroll_x = val;
                     self.push_state(cpu);
                 }
-                self.ppuscroll_pick = !self.ppuscroll_pick;
+                self.ppuscroll_ppuaddr_pick = !self.ppuscroll_ppuaddr_pick;
             },
             0x2006 => {
-                if self.ppuaddr_pick {
+                if self.ppuscroll_ppuaddr_pick {
                     self.ppuaddr_lo = val;
                 }
                 else {
                     self.ppuaddr_hi = val;
                 }
-                self.ppuaddr_pick = !self.ppuaddr_pick;
+                self.ppuscroll_ppuaddr_pick = !self.ppuscroll_ppuaddr_pick;
             },
             0x2007 => {
                 let addr = ((self.ppuaddr_lo as u16)&0x00FF)
@@ -480,15 +476,22 @@ impl Ppu {
     fn draw_with_state(&mut self, state_idx: usize, start_y: u16, end_y: u16) {
         let w = self.output_canvas.width() as u16;
         let h = self.output_canvas.height()as u16;
-        let n = self.states[state_idx].nametable;
 
         let sx = self.states[state_idx].ppuscroll_x as u16;
         let sy = self.states[state_idx].ppuscroll_y as u16;
 
-        self.draw_nametable(n,       0,0, w-sx, h-sy, sx, sy, state_idx, start_y, end_y);
-        self.draw_nametable((n+1)%4, w-sx,0, w, h-sy, 0, sy, state_idx, start_y, end_y);
-        self.draw_nametable((n+2)%4, 0,h-sy, w-sx, h, sx, 0, state_idx, start_y, end_y);
-        self.draw_nametable((n+3)%4, w-sx,h-sy, w, h, 0, 0, state_idx, start_y, end_y);
+        let n = match self.states[state_idx].nametable {
+            0 => [0,1,2,3],
+            1 => [1,0,3,2],
+            2 => [2,3,0,1],
+            3 => [3,2,1,0],
+            _ => panic!()
+        };
+
+        self.draw_nametable(n[0], 0,0, w-sx, h-sy, sx, sy, state_idx, start_y, end_y);
+        self.draw_nametable(n[1], w-sx,0, w, h-sy, 0, sy, state_idx, start_y, end_y);
+        self.draw_nametable(n[2], 0,h-sy, w-sx, h, sx, 0, state_idx, start_y, end_y);
+        self.draw_nametable(n[3], w-sx,h-sy, w, h, 0, 0, state_idx, start_y, end_y);
 
         for s in 0..64 {
             let (x,  y, height, pattern_addr, palette, priority, fh, fv) = self.get_sprite_attrs(s, state_idx);
