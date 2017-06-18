@@ -557,7 +557,7 @@ impl Ppu {
         for i in 0..self.states.len() {
             let start_y = (self.states[i].count*3/341) as u16 - VBL as u16;
             let end_y = if i < self.states.len()-1 {
-                (self.states[i+1].count*3/341) as u16 - VBL as u16
+                cmp::max((self.states[i+1].count*3/341) as u16 - VBL as u16, 1)
             } else {
                 self.output_canvas.height() as u16
             };
