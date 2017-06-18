@@ -386,12 +386,10 @@ impl Ppu {
 
         let (height, table, idx) = if self.sprite_size == 0 {
             (8, self.spritetable, self.oam[self.oamaddr.wrapping_add(4*s + 1) as usize])
-        }
-            else if self.sprite_size == 1 {
-                let val = self.oam[self.oamaddr.wrapping_add(4*s + 1) as usize];
-                (16, val&0b00000001, val&0b11111110)
-            }
-                else { panic!() };
+        } else if self.sprite_size == 1 {
+            let val = self.oam[self.oamaddr.wrapping_add(4*s + 1) as usize];
+            (16, val&0b00000001, val&0b11111110)
+        } else { panic!() };
 
         let pattern_base = match table {
             0 => 0x0000,
@@ -503,7 +501,7 @@ impl Ppu {
     pub fn increment_ppuaddr(&mut self) {
         let addr = ((self.ppuaddr_lo as u16)&0x00FF)
             + (((self.ppuaddr_hi as u16)&0xFF)<<8);
-        let addr = addr.wrapping_add(1);
+        let addr = addr.wrapping_add(if self.vram_inc==0 { 1 } else { 32 });
         self.ppuaddr_lo = (addr&0x00FF) as u8;
         self.ppuaddr_hi = ((addr&0xFF00)>>8) as u8;
     }
