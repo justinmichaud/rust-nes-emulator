@@ -268,25 +268,22 @@ impl Ppu {
     pub fn tick(&mut self, cpu: &mut Cpu) {
         let y = cpu.count*3/341; // y + 21 unrendered lines
 
-        if y > 241 && !self.has_blanked {
-            //oamaddr should be set every scanline, but lets see if this works
-            self.oamaddr = 0;
-            self.sprite_0_hit = false;
-
+        if y <= 21 && !self.has_blanked {
             self.has_blanked = true;
             self.vertical_blanking = true;
+            self.oamaddr = 0;
             if self.generate_nmi {
                 cpu.nmi();
             }
         }
 
-        if y < 241 {
+        if y > 21 {
             self.has_blanked = false;
             self.vertical_blanking = false;
         }
 
         let sprite_0_y = self.oam[self.oamaddr as usize] as u32 + 1;
-        if !self.sprite_0_hit && y >= sprite_0_y + 21 && y < sprite_0_y + 21 + 8 {
+        if y >= sprite_0_y + 21 && y < sprite_0_y + 21 + 8 {
             let (_,_,_, pattern_addr, _, _, _, _) = self.get_sprite_attrs(0);
 
             for py in 0..8 {
@@ -308,6 +305,7 @@ impl Ppu {
                 }
             }
         }
+        self.sprite_0_hit = false;
     }
 
     fn draw_nametable(&mut self, nametable: u8, from_x: u16, from_y: u16,
@@ -357,9 +355,12 @@ impl Ppu {
                             palette_idx += colour_bits;
                         }
 
-                        let hsv = self.read(0x3F00 + palette_idx as u16) as usize;
+                        let mask = if self.greyscale { 0x30 } else { 0xFF };
+                        let hsv = (self.read(0x3F00 + palette_idx as u16)&mask) as usize;
                         let opacity = if palette_idx == 0 { 0xFE } else { 0xFF }; // Hack to store if this part of the background is "transparent"
-                        let colour = image::Rgba([PALETTE[hsv*3], PALETTE[hsv*3+1], PALETTE[hsv*3+2], opacity]);
+                        let colour = image::Rgba([PALETTE[hsv*3],
+                            PALETTE[hsv*3+1],
+                            PALETTE[hsv*3+2], opacity]);
 
                         if self.show_background {
                             let real_x = (x as u32 + 8*tile_x as u32 + from_x as u32)

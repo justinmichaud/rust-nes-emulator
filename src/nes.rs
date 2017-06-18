@@ -54,13 +54,8 @@ impl Nes {
     }
 
     pub fn tick(&mut self) {
-        // 523 lines each of 341 cycles and 1 line of 340 cycles
-        //      = 178683 PPU cycles per 2 fields
-        // http://forums.nesdev.com/viewtopic.php?t=1675
-        // Divide by 2 to get per field, divide by 3 to get cpu cycles
-        // This is off, but it should be fine (I hope)
         for _ in 0..2 {
-            while self.cpu.count < 29780 {
+            while self.cpu.count < 261*341/3 {
                 if self.chipset.ppu_dma_requested {
                     self.chipset.ppu_dma_requested = false;
                     self.chipset.ppu.ppudma(self.chipset.ppu_dma_val,
@@ -77,7 +72,7 @@ impl Nes {
                 }
             }
 
-            self.cpu.count -= 29780;
+            self.cpu.count -= 261*341/3;
         }
     }
 
