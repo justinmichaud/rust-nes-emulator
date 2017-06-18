@@ -96,20 +96,16 @@ mod tests {
     use super::*;
     use mem::*;
 
-    fn make_nes(file: &str) -> (Nes, PistonWindow) {
+    fn instr_misc_test_rom(file: &str) {
         let mut window: PistonWindow =
             WindowSettings::new("Emulator Tests", [256*3, 240*3])
                 .exit_on_esc(true).build().unwrap();
 
-        match load_file(file) {
+        let mut nes = match load_file(file) {
             Ok((flags, prg, chr)) =>
-                (Nes::new(prg, chr, flags.mapper, flags.prg_ram_size, flags.horiz_mirroring, &mut window), window),
+                Nes::new(prg, chr, flags.mapper, flags.prg_ram_size, flags.horiz_mirroring, &mut window),
             Err(e) => panic!("Error: {:?}", e)
-        }
-    }
-
-    fn instr_misc_test_rom(file: &str) {
-        let (mut nes, mut window) = make_nes(file);
+        };
 
         loop {
             nes.tick();
@@ -145,6 +141,21 @@ mod tests {
     #[test]
     fn ppu_test_01() {
         instr_misc_test_rom("tests/nes-test-roms/ppu_sprite_hit/rom_singles/01-basics.nes")
+    }
+
+    #[test]
+    fn ppu_test_02() {
+        instr_misc_test_rom("tests/nes-test-roms/ppu_sprite_hit/rom_singles/02-alignment.nes")
+    }
+
+    #[test]
+    fn ppu_test_03() {
+        instr_misc_test_rom("tests/nes-test-roms/ppu_sprite_hit/rom_singles/03-corners.nes")
+    }
+
+    #[test]
+    fn ppu_test_09() {
+        instr_misc_test_rom("tests/nes-test-roms/ppu_sprite_hit/rom_singles/09-timing.nes")
     }
 }
 
