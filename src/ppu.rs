@@ -6,6 +6,8 @@ use piston_window::*;
 use texture::Filter;
 use image;
 
+static VBL: u32 = 21;
+
 static PALETTE: [u8; 192] = [
     124,124,124,
     0,0,252,
@@ -315,7 +317,7 @@ impl Ppu {
     pub fn tick(&mut self, cpu: &mut Cpu) {
         let y = cpu.count*3/341;
 
-        if y < 21 && !self.has_blanked {
+        if y < VBL && !self.has_blanked {
             self.has_blanked = true;
             self.vertical_blanking = true;
             self.oamaddr = 0;
@@ -325,7 +327,7 @@ impl Ppu {
             }
         }
 
-        if y >= 21 && self.has_blanked {
+        if y >= VBL && self.has_blanked {
             self.has_blanked = false;
             self.vertical_blanking = false;
             self.has_drawn_sprite0_background = false;
@@ -336,8 +338,8 @@ impl Ppu {
         }
 
         let sprite_0_y = self.oam[self.oamaddr as usize] as u32 + 1;
-        if self.show_sprites && self.show_background &&
-                y >= sprite_0_y + 22 && y < sprite_0_y + 22 + 8 {
+        if self.show_sprites && self.show_background && !self.sprite_0_hit &&
+                y >= sprite_0_y + VBL + 1 && y < sprite_0_y + VBL + 1 + 8 {
             let idx = self.states.len()-1;
             let (sprite_0_x,_,_, pattern_addr, _, _, _, _) = self.get_sprite_attrs(0, idx);
 
@@ -350,7 +352,7 @@ impl Ppu {
                 self.show_sprites = true;
             }
 
-            let py = y as u16 - sprite_0_y as u16  - 22;
+            let py = y as u16 - sprite_0_y as u16  - VBL as u16 - 1;
 
             // Who cares about 16px sprites!
             let lo = self.read(pattern_addr + py);
@@ -368,7 +370,7 @@ impl Ppu {
                 }
 
                 self.sprite_0_hit = true;
-                return;
+                break;
             }
         }
     }
@@ -550,9 +552,9 @@ impl Ppu {
         }
 
         for i in 0..self.states.len() {
-            let start_y = (self.states[i].count*3/341) as u16 - 21;
+            let start_y = (self.states[i].count*3/341) as u16 - VBL as u16;
             let end_y = if i < self.states.len()-1 {
-                (self.states[i+1].count*3/341) as u16 - 21
+                (self.states[i+1].count*3/341) as u16 - VBL as u16
             } else {
                 self.output_canvas.height() as u16
             };

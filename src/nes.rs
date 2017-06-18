@@ -59,7 +59,8 @@ impl Nes {
 
     pub fn tick(&mut self) {
         for _ in 0..2 {
-            while self.cpu.count < 261*341/3 {
+            let frame_time = 263*341/3;
+            while self.cpu.count < frame_time {
                 if self.chipset.ppu_dma_requested {
                     self.chipset.ppu_dma_requested = false;
                     self.chipset.ppu.ppudma(self.chipset.ppu_dma_val,
@@ -83,7 +84,7 @@ impl Nes {
                 }
             }
 
-            self.cpu.count -= 261*341/3;
+            self.cpu.count -= frame_time;
         }
     }
 

@@ -85,7 +85,7 @@ fn emulate((flags, prg, chr) : (Flags, Vec<u8>, Vec<u8>)) {
 }
 
 fn main() {
-    match load_file("tests/c_playground/lesson11.nes") {
+    match load_file("tests/c_playground/lesson11b.nes") {
         Ok(rom) => emulate(rom),
         Err(e) => panic!("Error: {:?}", e)
     }
@@ -156,6 +156,11 @@ mod tests {
     #[test]
     fn ppu_test_09() {
         instr_misc_test_rom("tests/nes-test-roms/ppu_sprite_hit/rom_singles/09-timing.nes")
+    }
+
+    #[test]
+    fn ppu_test_10() {
+        instr_misc_test_rom("tests/nes-test-roms/ppu_sprite_hit/rom_singles/10-timing_order.nes")
     }
 }
 
