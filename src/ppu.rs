@@ -129,8 +129,10 @@ pub struct Ppu {
 
     output_texture: G2dTexture,
     output_canvas: image::ImageBuffer<image::Rgba<u8>, Vec<u8>>,
-    sprite_canvas: image::ImageBuffer<image::Rgba<u8>, Vec<u8>>,
+    sprite_output: [[u16; 30*8]; 32*8],
+    bg_output: [[u16; 30*8]; 32*8],
     sprite_priority: [[bool; 30*8]; 32*8],
+    pixel_greyscale: [[bool; 30*8]; 32*8],
     has_blanked: bool,
 
     states: Vec<MidframeState>,
@@ -140,8 +142,6 @@ pub struct Ppu {
 impl Ppu {
     pub fn new(chr: Vec<u8>, horiz_mapping: bool, window: &mut PistonWindow) -> Ppu {
         let (out_canvas, out_texture) = make_texture(32 * 8, 30 * 8, window);
-        let sprite_canvas: image::ImageBuffer<image::Rgba<u8>, Vec<u8>>
-            = image::ImageBuffer::new(32 * 8, 30 * 8);
 
         Ppu {
             chr: chr,
@@ -183,8 +183,10 @@ impl Ppu {
 
             output_texture: out_texture,
             output_canvas: out_canvas,
-            sprite_canvas: sprite_canvas,
+            sprite_output: [[0; 30*8]; 32*8],
+            bg_output: [[0; 30*8]; 32*8],
             sprite_priority: [[false; 30*8]; 32*8],
+            pixel_greyscale: [[false; 30*8]; 32*8],
             has_blanked: false,
 
             states: vec![],
@@ -360,9 +362,9 @@ impl Ppu {
                     + (((hi&mask)>>(7-px))<<1)) != 0;
 
                 if !solid { continue; }
-                if self.output_canvas.get_pixel(sprite_0_x as u32 + px as u32, sprite_0_y as u32 + py as u32)
-                    .data[3] < 0xFF {
-                    continue; //Hack to check for transparency - This could use a refactoring
+                if self.bg_output[sprite_0_x as usize + px as usize]
+                        [sprite_0_y as usize + py as usize]&0b00000011 == 0 {
+                    continue;
                 }
 
                 self.sprite_0_hit = true;
@@ -413,34 +415,30 @@ impl Ppu {
 
                     for x in 0..8 {
                         let mask = 0b00000001<<(7-x);
-                        let mut palette_idx = ((lo&mask)>>(7-x))
-                            + (((hi&mask)>>(7-x))<<1);
+                        let mut palette_idx = ((lo&mask)>>(7-x)) as u16
+                            + (((hi&mask)>>(7-x))<<1) as u16;
                         if palette_idx != 0 {
-                            palette_idx += colour_bits;
+                            palette_idx += colour_bits as u16;
                         }
 
-                        let mask = if self.states[state_idx].greyscale { 0x30 } else { 0xFF };
-                        let hsv = (self.read(0x3F00 + palette_idx as u16)&mask) as usize;
-                        let opacity = if palette_idx == 0 { 0xFE } else { 0xFF }; // Hack to store if this part of the background is "transparent"
-                        let colour = image::Rgba([PALETTE[hsv*3],
-                            PALETTE[hsv*3+1],
-                            PALETTE[hsv*3+2], opacity]);
+                        let real_x = (x as u32 + 8*tile_x as u32 + from_x as u32)
+                            .wrapping_sub(off_x as u32);
+                        let real_y = (y as u32 + 8*tile_y as u32 + from_y as u32)
+                            .wrapping_sub(off_y as u32);
+
+                        if real_x >= self.output_canvas.width()
+                            || real_y >= self.output_canvas.height()
+                            || real_y < start_y as u32
+                            || real_y > end_y as u32 {
+                            continue;
+                        }
 
                         if self.states[state_idx].show_background {
-                            let real_x = (x as u32 + 8*tile_x as u32 + from_x as u32)
-                                .wrapping_sub(off_x as u32);
-                            let real_y = (y as u32 + 8*tile_y as u32 + from_y as u32)
-                                .wrapping_sub(off_y as u32);
-
-                            if real_x >= self.output_canvas.width()
-                                || real_y >= self.output_canvas.height()
-                                || real_y < start_y as u32
-                                || real_y > end_y as u32 {
-                                continue;
-                            }
-
-                            self.output_canvas.put_pixel(real_x, real_y, colour);
+                            self.bg_output[real_x as usize][real_y as usize] = 0x3F00 + palette_idx;
                         }
+
+                        self.pixel_greyscale[real_x as usize][real_y as usize]
+                            = self.states[state_idx].greyscale;
                     }
                 }
             }
@@ -514,53 +512,41 @@ impl Ppu {
                             y as u32 + 15 - (8 * i as u32 + py as u32)
                         };
 
-                        if real_x >= self.sprite_canvas.width()
+                        if real_x >= self.output_canvas.width()
                             || real_y > end_y as u32
                             || real_y < start_y as u32 {
                             continue;
                         }
 
-                        if self.sprite_canvas.get_pixel(real_x, real_y).data != [0, 0, 0, 0] {
+                        if self.sprite_output[real_x as usize][real_y as usize] != 0 {
                             continue;
                         }
 
                         let mask = 0b00000001 << (7 - px);
-                        let palette_idx = ((lo & mask) >> (7 - px)) as u16
-                            + (((hi & mask) >> (7 - px)) << 1) as u16;
+                        let palette_idx = ((lo & mask) >> (7 - px))
+                            + (((hi & mask) >> (7 - px)) << 1);
                         if palette_idx == 0 {
                             continue;
                         }
 
-                        let hsv = self.read(palette + palette_idx as u16) as usize;
-                        let colour = image::Rgba([PALETTE[hsv * 3], PALETTE[hsv * 3 + 1], PALETTE[hsv * 3 + 2], 0xFF]);
-
                         if self.states[state_idx].show_sprites {
-                            self.sprite_canvas.put_pixel(real_x, real_y, colour);
+                            self.sprite_output[real_x as usize][real_y as usize]
+                                = palette_idx as u16 + palette;
                             self.sprite_priority[real_x as usize][real_y as usize] = priority;
                         }
                     }
                 }
             }
         }
-
-
-        for (x,y,p) in self.output_canvas.enumerate_pixels_mut() {
-            let sprite = self.sprite_canvas.get_pixel(x, y);
-
-            if sprite.data[3] > 0 && self.sprite_priority[x as usize][y as usize] {
-                *p = *sprite;
-            }
-        }
     }
 
     pub fn prepare_draw(&mut self, window: &mut PistonWindow) {
-        for (_,_,p) in self.output_canvas.enumerate_pixels_mut() {
-            *p = image::Rgba([255,255,0,255]);
-        }
-
-        for (x,y,p) in self.sprite_canvas.enumerate_pixels_mut() {
-            *p = image::Rgba([0,0,0,0]);
-            self.sprite_priority[x as usize][y as usize] = false;
+        for x in 0..self.output_canvas.width() {
+            for y in 0..self.output_canvas.height() {
+                self.sprite_output[x as usize][y as usize] = 0;
+                self.bg_output[x as usize][y as usize] = 0;
+                self.sprite_priority[x as usize][y as usize] = false;
+            }
         }
 
         for i in 0..self.states.len() {
@@ -573,6 +559,26 @@ impl Ppu {
             if end_y < start_y { continue; }
 
             self.draw_with_state(i, start_y, end_y-1);
+        }
+
+        for x in 0..self.output_canvas.width() {
+            for y in 0..self.output_canvas.height() {
+                let sprite = self.sprite_output[x as usize][y as usize];
+                let bg = self.bg_output[x as usize][y as usize];
+
+                let mask = if self.pixel_greyscale[x as usize][y as usize] { 0x30 } else { 0xFF };
+
+                let p_idx = if sprite > 0 && self.sprite_priority[x as usize][y as usize] {
+                    sprite
+                } else {
+                    bg
+                };
+
+                let hsv = (self.read(p_idx) & mask) as usize;
+                self.output_canvas.put_pixel(x, y, image::Rgba([PALETTE[hsv * 3],
+                    PALETTE[hsv * 3 + 1],
+                    PALETTE[hsv * 3 + 2], 0xFF]));
+            }
         }
 
         self.output_texture.update(&mut window.encoder, &self.output_canvas).unwrap();
