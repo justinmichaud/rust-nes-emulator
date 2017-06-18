@@ -266,22 +266,47 @@ impl Ppu {
     }
 
     pub fn tick(&mut self, cpu: &mut Cpu) {
-        let blank_begin = 27393; // 231 * 341 / 3 (rough estimate)
-        let blank_end = 0;
+        let y = cpu.count*3/341; // y + 21 unrendered lines
 
-        if cpu.count > blank_end && cpu.count < blank_begin {
-            self.has_blanked = false;
-            self.vertical_blanking = false;
-        }
-        else if cpu.count > blank_begin && !self.has_blanked {
+        if y > 241 && !self.has_blanked {
+            //oamaddr should be set every scanline, but lets see if this works
+            self.oamaddr = 0;
+            self.sprite_0_hit = false;
+
             self.has_blanked = true;
             self.vertical_blanking = true;
             if self.generate_nmi {
                 cpu.nmi();
             }
+        }
 
-            //This should be done every scanline, but lets see if this works
-            self.oamaddr = 0;
+        if y < 241 {
+            self.has_blanked = false;
+            self.vertical_blanking = false;
+        }
+
+        let sprite_0_y = self.oam[self.oamaddr as usize] as u32 + 1;
+        if !self.sprite_0_hit && y >= sprite_0_y + 21 && y < sprite_0_y + 21 + 8 {
+            let (_,_,_, pattern_addr, _, _, _, _) = self.get_sprite_attrs(0);
+
+            for py in 0..8 {
+                // Who cares about 16px sprites!
+                let lo = self.read(pattern_addr + py);
+                let hi = self.read(pattern_addr + py + 8);
+
+                for px in 0..8 {
+                    let mask = 0b00000001<<(7-px);
+                    let solid = (((lo&mask)>>(7-px))
+                        + (((hi&mask)>>(7-px))<<1)) != 0;
+
+                    if !solid { continue; }
+
+                    // I should check if the background isn't transparent, but I am going to wait
+                    // until it becomes a problem
+                    self.sprite_0_hit = true;
+                    return;
+                }
+            }
         }
     }
 
@@ -333,7 +358,8 @@ impl Ppu {
                         }
 
                         let hsv = self.read(0x3F00 + palette_idx as u16) as usize;
-                        let colour = image::Rgba([PALETTE[hsv*3], PALETTE[hsv*3+1], PALETTE[hsv*3+2], 0xFF]);
+                        let opacity = if palette_idx == 0 { 0xFE } else { 0xFF }; // Hack to store if this part of the background is "transparent"
+                        let colour = image::Rgba([PALETTE[hsv*3], PALETTE[hsv*3+1], PALETTE[hsv*3+2], opacity]);
 
                         if self.show_background {
                             let real_x = (x as u32 + 8*tile_x as u32 + from_x as u32)
@@ -353,6 +379,36 @@ impl Ppu {
             }
         }
 
+    }
+
+    fn get_sprite_attrs(&self, s: u8) -> (u8, u16, u8, u16, u16, bool, bool, bool) {
+        let y = self.oam[self.oamaddr.wrapping_add(4*s) as usize] as u16 + 1;
+
+        let (height, table, idx) = if self.sprite_size == 0 {
+            (8, self.spritetable, self.oam[self.oamaddr.wrapping_add(4*s + 1) as usize])
+        }
+            else if self.sprite_size == 1 {
+                let val = self.oam[self.oamaddr.wrapping_add(4*s + 1) as usize];
+                (16, val&0b00000001, val&0b11111110)
+            }
+                else { panic!() };
+
+        let pattern_base = match table {
+            0 => 0x0000,
+            1 => 0x1000,
+            _ => panic!()
+        };
+        let pattern_addr = pattern_base + 16*idx as u16;
+
+        let flags = self.oam[self.oamaddr.wrapping_add(4*s + 2) as usize];
+        let palette = 0x3F10 + (((flags&0b00000011) as u16)<<2);
+        let priority = flags&0b00100000==0;
+        let fh = flags&0b01000000>0;
+        let fv = flags&0b10000000>0;
+
+        let x = self.oam[self.oamaddr.wrapping_add(4*s + 3) as usize];
+
+        (x, y, height, pattern_addr, palette, priority, fh, fv)
     }
 
     pub fn prepare_draw(&mut self, window: &mut PistonWindow) {
@@ -378,38 +434,14 @@ impl Ppu {
         self.draw_nametable((n+3)%4, w-sx,h-sy, w, h, 0, 0);
 
         for s in 0..64 {
-            let y = self.oam[self.oamaddr.wrapping_add(4*s) as usize] as usize + 1;
+            let (x,  y, height, pattern_addr, palette, priority, fh, fv) = self.get_sprite_attrs(s);
             if y >= 0xF0 { continue; }
             if y <= 2 { continue; }
 
-            let (height, table, idx) = if self.sprite_size == 0 {
-                (8, self.spritetable, self.oam[self.oamaddr.wrapping_add(4*s + 1) as usize])
-            }
-            else if self.sprite_size == 1 {
-                let val = self.oam[self.oamaddr.wrapping_add(4*s + 1) as usize];
-                (16, val&0b00000001, val&0b11111110)
-            }
-            else { panic!() };
-
-            let pattern_base = match table {
-                0 => 0x0000,
-                1 => 0x1000,
-                _ => panic!()
-            };
-            let pattern_addr = pattern_base + 16*idx as u16;
-
-            let flags = self.oam[self.oamaddr.wrapping_add(4*s + 2) as usize];
-            let palette = 0x3F10 + (((flags&0b00000011) as u16)<<2);
-            let priority = flags&0b00100000==0;
-            let fh = flags&0b01000000>0;
-            let fv = flags&0b10000000>0;
-
-            let x = self.oam[self.oamaddr.wrapping_add(4*s + 3) as usize];
-
             for i in 0..(height/8) {
                 for py in 0..8 {
-                    let lo = self.read(pattern_addr + 16*i + py);
-                    let hi = self.read(pattern_addr + 16*i + py + 8);
+                    let lo = self.read(pattern_addr + 16*i as u16 + py);
+                    let hi = self.read(pattern_addr + 16*i as u16 + py + 8);
 
                     for px in 0..8 {
                         let real_x = if !fh {
