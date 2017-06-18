@@ -242,6 +242,7 @@ pub struct Cpu {
     irq_disable: bool,
     zero: bool,
     carry: bool,
+    decimal: bool,
 
     pub count: u32,
     pub debug: bool,
@@ -604,12 +605,32 @@ fn manual(cpu: &mut Cpu, mem: &mut Mem, op: u8) {
         0x78 => cpu.irq_disable = true, //SEI
         0xB8 => cpu.overflow = false, //CLV
         0xEA => (), //NOP
-        0xAA => cpu.x = cpu.a, //TAX
-        0x8A => cpu.a = cpu.x, //TXA
-        0xA8 => cpu.y = cpu.a, //TAY
-        0x98 => cpu.a = cpu.y, //TYA
+        0xAA => { //TAX
+            cpu.x = cpu.a;
+            cpu.zero = cpu.x == 0;
+            cpu.negative = cpu.x&0b10000000 > 0;
+        },
+        0x8A => { //TXA
+            cpu.a = cpu.x;
+            cpu.zero = cpu.a == 0;
+            cpu.negative = cpu.a&0b10000000 > 0;
+        },
+        0xA8 => { //TAY
+            cpu.y = cpu.a;
+            cpu.zero = cpu.y == 0;
+            cpu.negative = cpu.y&0b10000000 > 0;
+        },
+        0x98 => { //TYA
+            cpu.a = cpu.y;
+            cpu.zero = cpu.a == 0;
+            cpu.negative = cpu.a&0b10000000 > 0;
+        },
         0x9A => cpu.s = cpu.x, //TXS
-        0xBA => cpu.x = cpu.s, //TSX
+        0xBA => { //TSX
+            cpu.x = cpu.s;
+            cpu.zero = cpu.x == 0;
+            cpu.negative = cpu.x&0b10000000 > 0;
+        },
         0x48 => { //PHA
             cpu.count += 1;
             let a = cpu.a;
@@ -618,6 +639,8 @@ fn manual(cpu: &mut Cpu, mem: &mut Mem, op: u8) {
         0x68 => { //PLA
             cpu.count += 2;
             cpu.a = pull(cpu, mem);
+            cpu.zero = cpu.a == 0;
+            cpu.negative = cpu.a&0b10000000 > 0;
         },
         0x08 => { //PHP
             cpu.count += 1;
@@ -662,8 +685,8 @@ fn manual(cpu: &mut Cpu, mem: &mut Mem, op: u8) {
                 + ((mem.read((addr&0xFF00) + ((addr+1)&0x00FF)) as u16)<<8);
             cpu.pc = pc;
         },
-        0xF8 => (), //Ignore decimal mode
-        0xD8 => (), //Ignore decimal mode
+        0xF8 => cpu.decimal = true,
+        0xD8 => cpu.decimal = false,
         _ => panic!("Not implemented yet! Op: {:X} at {:X}", op, cpu.pc-1)
     }
 }
@@ -736,6 +759,7 @@ impl Cpu {
             count: 0,
             debug: false,
             nmi_waiting: false,
+            decimal: false,
         }
     }
 
@@ -744,6 +768,7 @@ impl Cpu {
         + ((self.overflow as u8)<<6)
         + (1u8<<5)
         + ((self.interrupt as u8)<<4)
+        + ((self.decimal as u8)<<3)
         + ((self.irq_disable as u8)<<2)
         + ((self.zero as u8)<<1)
         + ((self.carry as u8)<<0)
@@ -752,6 +777,7 @@ impl Cpu {
     pub fn set_p(&mut self, val: u8) {
         self.negative       = val&0b10000000>0;
         self.overflow       = val&0b01000000>0;
+        self.decimal        = val&0b00001000>0;
         self.irq_disable    = val&0b00000100>0;
         self.zero           = val&0b00000010>0;
         self.carry          = val&0b00000001>0;
