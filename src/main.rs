@@ -85,7 +85,7 @@ fn emulate((flags, prg, chr) : (Flags, Vec<u8>, Vec<u8>)) {
 }
 
 fn main() {
-    match load_file("tests/c_playground/lesson11b.nes") {
+    match load_file("tests/nes-test-roms/ppu_sprite_hit/rom_singles/01-basics.nes") {
         Ok(rom) => emulate(rom),
         Err(e) => panic!("Error: {:?}", e)
     }

@@ -327,6 +327,7 @@ impl Ppu {
             self.has_blanked = false;
             self.vertical_blanking = false;
             self.has_drawn_sprite0_background = false;
+            self.sprite_0_hit = false;
 
             self.states.clear();
             self.push_state(cpu);
@@ -368,7 +369,6 @@ impl Ppu {
                 return;
             }
         }
-        self.sprite_0_hit = false;
     }
 
     fn draw_nametable(&mut self, nametable: u8, from_x: u16, from_y: u16,
