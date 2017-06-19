@@ -454,7 +454,7 @@ impl Ppu {
 
     fn draw_with_state(&mut self, state_idx: usize, state_start_y: u16, state_end_y: u16) {
         let sx = self.states[state_idx].ppuscroll_x as u16;
-        let sy = 6;//self.states[state_idx].ppuscroll_y as u16;
+        let sy = self.states[state_idx].ppuscroll_y as u16;
         let base_nt = self.states[state_idx].nametable;
         let (base_nt_x, base_nt_y) = match base_nt {
             0 => (0,0),
@@ -466,22 +466,28 @@ impl Ppu {
 
         for screen_x in 0..33 {
             for screen_y in (state_start_y/8)...(state_end_y/8+1) {
-                let x_nt = ((sx/8 + screen_x + 32*base_nt_x)%64)/32;
-                let y_nt = ((sy/8 + screen_y + 30*base_nt_y)%60)/30;
+                let x_nt = ((sx / 8 + screen_x + 32 * base_nt_x) % 64) / 32;
+                let y_nt = ((sy / 8 + screen_y + 30 * base_nt_y) % 60) / 30;
 
                 let n = match (x_nt, y_nt) {
-                    (0,0) => 0,
-                    (1,0) => 1,
-                    (0,1) => 2,
-                    (1,1) => 3,
+                    (0, 0) => 0,
+                    (1, 0) => 1,
+                    (0, 1) => 2,
+                    (1, 1) => 3,
                     _ => panic!()
                 };
 
-                let tile_x = ((sx/8 + screen_x + 32*base_nt_x)%64)%32;
-                let tile_y = ((sy/8 + screen_y + 30*base_nt_y)%60)%30;
+                let tile_x = ((sx / 8 + screen_x + 32 * base_nt_x) % 64) % 32;
+                let tile_y = ((sy / 8 + screen_y + 30 * base_nt_y) % 60) % 30;
 
-                let (start_x, off_x) = if screen_x == 0 { (0, sx%8) } else { (screen_x*8 - sx%8, 0) }; // Why v no work?
-                let (start_y, off_y) = if screen_y == state_start_y/8 { (state_start_y, 0) } else { (screen_y*8 - sy%8, 0) };
+                let (start_x, off_x) = if screen_x == 0 { (0, sx % 8) } else { (screen_x * 8 - sx % 8, 0) };
+                let (start_y, off_y) = if screen_y*8 + 8 - sy%8 <= state_start_y {
+                    continue;
+                } else if screen_y*8 <= state_start_y + sy%8 {
+                    (state_start_y, state_start_y + sy%8 - screen_y*8)
+                } else {
+                    (screen_y*8 - sy%8, 0)
+                };
                 let end_x = cmp::min(screen_x*8 + 8 - sx%8 - 1, self.output_canvas.width() as u16 - 1);
                 let end_y = cmp::min(screen_y*8 + 8 - sy%8 - 1, state_end_y);
 
@@ -555,28 +561,16 @@ impl Ppu {
             }
         }
 
-//        for i in 0..self.states.len() {
-//            let start_y = (self.states[i].count*3/341) as u16 - VBL as u16;
-//            let end_y = if i < self.states.len()-1 {
-//                cmp::max((self.states[i+1].count*3/341) as u16 - VBL as u16, 1)
-//            } else {
-//                self.output_canvas.height() as u16
-//            };
-//            if end_y < start_y { continue; }
-//
-//            self.draw_with_state(i, start_y, end_y-1);
-//        }
+        for i in 0..self.states.len() {
+            let start_y = (self.states[i].count*3/341) as u16 - VBL as u16;
+            let end_y = if i < self.states.len()-1 {
+                cmp::max((self.states[i+1].count*3/341) as u16 - VBL as u16, 1)
+            } else {
+                self.output_canvas.height() as u16
+            };
+            if end_y < start_y { continue; }
 
-        let l = self.states.len()-1;
-        {
-            let s = self.states.get_mut(l).unwrap();
-            s.ppuscroll_y = s.ppuscroll_x;
-            s.ppuscroll_x = 0;
-        }
-        self.draw_with_state(l, 100, 200);
-        for x in 0..32*8 {
-            self.bg_output[x as usize][100] = 2;
-            self.bg_output[x as usize][200] = 2;
+            self.draw_with_state(i, start_y, end_y-1);
         }
 
         for x in 0..self.output_canvas.width() {
