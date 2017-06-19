@@ -371,9 +371,9 @@ impl Ppu {
         }
     }
 
-    fn draw_nametable(&mut self, nametable: u8, from_x: u16, from_y: u16,
-                      to_x: u16, to_y: u16, off_x: u16, off_y: u16, state_idx: usize,
-                      start_y: u16, end_y: u16) {
+    fn draw_tile(&mut self, state_idx: usize, nametable: u8, tile_x: u16, tile_y: u16,
+            screen_x_start: u16, screen_y_start: u16, screen_x_end: u16, screen_y_end: u16,
+            x_offset: u16, y_offset: u16) {
         let nametable = match nametable {
             0 => 0x2000,
             1 => 0x2400,
@@ -388,57 +388,36 @@ impl Ppu {
             _ => panic!("Background table {} not recognized", self.states[state_idx].backgroundtable)
         };
 
-        let region_width = cmp::min((to_x - from_x)/8 + 1, 32);
-        let region_height = cmp::min((to_y - from_y)/8 + 1, 30);
+        let pattern_number = self.read(nametable + tile_x + 32*tile_y);
 
-        for ofx in 0..region_width {
-            for ofy in 0..region_height {
-                let tile_x = ofx + off_x/8;
-                let tile_y = ofy + off_y/8;
+        let attr_x = tile_x/4;
+        let attr_y = tile_y/4;
+        let over_x = (tile_x/2)%2;
+        let over_y = (tile_y/2)%2;
+        let attr = self.read(nametable + 0x3C0 + attr_x + 8*attr_y);
+        let mask = 0b00000011 << (4*over_y + 2*over_x);
+        let colour_bits = ((attr&(mask)) >> (4*over_y + 2*over_x))<<2;
 
-                let pattern_number = self.read(nametable + tile_x + 32*tile_y);
+        let pattern_addr = bg_pattern as u16 + 16*pattern_number as u16;
+        for y in y_offset...(screen_y_end-screen_y_start+y_offset) {
+            let lo = self.read(pattern_addr + y);
+            let hi = self.read(pattern_addr + y + 8);
 
-                let attr_x = tile_x/4;
-                let attr_y = tile_y/4;
-                let over_x = (tile_x/2)%2;
-                let over_y = (tile_y/2)%2;
-                let attr = self.read(nametable + 0x3C0 + attr_x + 8*attr_y);
-                let mask = 0b00000011 << (4*over_y + 2*over_x);
-                let colour_bits = ((attr&(mask)) >> (4*over_y + 2*over_x))<<2;
-
-                let pattern_addr = bg_pattern as u16 + 16*pattern_number as u16;
-                for y in 0..8 {
-                    let lo = self.read(pattern_addr + y);
-                    let hi = self.read(pattern_addr + y + 8);
-
-                    for x in 0..8 {
-                        let mask = 0b00000001<<(7-x);
-                        let mut palette_idx = ((lo&mask)>>(7-x)) as u16
-                            + (((hi&mask)>>(7-x))<<1) as u16;
-                        if palette_idx != 0 {
-                            palette_idx += colour_bits as u16;
-                        }
-
-                        let real_x = (x as u32 + 8*tile_x as u32 + from_x as u32)
-                            .wrapping_sub(off_x as u32);
-                        let real_y = (y as u32 + 8*tile_y as u32 + from_y as u32)
-                            .wrapping_sub(off_y as u32);
-
-                        if real_x >= self.output_canvas.width()
-                            || real_y >= self.output_canvas.height()
-                            || real_y < start_y as u32
-                            || real_y > end_y as u32 {
-                            continue;
-                        }
-
-                        if self.states[state_idx].show_background {
-                            self.bg_output[real_x as usize][real_y as usize] = 0x3F00 + palette_idx;
-                        }
-
-                        self.pixel_greyscale[real_x as usize][real_y as usize]
-                            = self.states[state_idx].greyscale;
-                    }
+            for x in x_offset...(screen_x_end-screen_x_start+x_offset) {
+                let mask = 0b00000001<<(7-x);
+                let mut palette_idx = ((lo&mask)>>(7-x)) as u16
+                    + (((hi&mask)>>(7-x))<<1) as u16;
+                if palette_idx != 0 {
+                    palette_idx += colour_bits as u16;
                 }
+
+                if self.states[state_idx].show_background {
+                    self.bg_output[(x+screen_x_start-x_offset) as usize][(y+screen_y_start-y_offset) as usize]
+                        = 0x3F00 + palette_idx;
+                }
+
+                self.pixel_greyscale[(x+screen_x_start-x_offset) as usize][(y+screen_y_start-y_offset) as usize]
+                    = self.states[state_idx].greyscale;
             }
         }
     }
@@ -473,32 +452,54 @@ impl Ppu {
         (x, y, height, pattern_addr, palette, priority, fh, fv)
     }
 
-    fn draw_with_state(&mut self, state_idx: usize, start_y: u16, end_y: u16) {
-        let w = self.output_canvas.width() as u16;
-        let h = self.output_canvas.height()as u16;
-
+    fn draw_with_state(&mut self, state_idx: usize, state_start_y: u16, state_end_y: u16) {
         let sx = self.states[state_idx].ppuscroll_x as u16;
-        let sy = self.states[state_idx].ppuscroll_y as u16;
-
-        let n = match self.states[state_idx].nametable {
-            0 => [0,1,2,3],
-            1 => [1,0,3,2],
-            2 => [2,3,0,1],
-            3 => [3,2,1,0],
+        let sy = 6;//self.states[state_idx].ppuscroll_y as u16;
+        let base_nt = self.states[state_idx].nametable;
+        let (base_nt_x, base_nt_y) = match base_nt {
+            0 => (0,0),
+            1 => (1,0),
+            2 => (0,1),
+            3 => (1,1),
             _ => panic!()
         };
 
-        self.draw_nametable(n[0], 0,0, w-sx, h-sy, sx, sy, state_idx, start_y, end_y);
-        self.draw_nametable(n[1], w-sx,0, w, h-sy, 0, sy, state_idx, start_y, end_y);
-        self.draw_nametable(n[2], 0,h-sy, w-sx, h, sx, 0, state_idx, start_y, end_y);
-        self.draw_nametable(n[3], w-sx,h-sy, w, h, 0, 0, state_idx, start_y, end_y);
+        for screen_x in 0..33 {
+            for screen_y in (state_start_y/8)...(state_end_y/8+1) {
+                let x_nt = ((sx/8 + screen_x + 32*base_nt_x)%64)/32;
+                let y_nt = ((sy/8 + screen_y + 30*base_nt_y)%60)/30;
+
+                let n = match (x_nt, y_nt) {
+                    (0,0) => 0,
+                    (1,0) => 1,
+                    (0,1) => 2,
+                    (1,1) => 3,
+                    _ => panic!()
+                };
+
+                let tile_x = ((sx/8 + screen_x + 32*base_nt_x)%64)%32;
+                let tile_y = ((sy/8 + screen_y + 30*base_nt_y)%60)%30;
+
+                let (start_x, off_x) = if screen_x == 0 { (0, sx%8) } else { (screen_x*8 - sx%8, 0) }; // Why v no work?
+                let (start_y, off_y) = if screen_y == state_start_y/8 { (state_start_y, 0) } else { (screen_y*8 - sy%8, 0) };
+                let end_x = cmp::min(screen_x*8 + 8 - sx%8 - 1, self.output_canvas.width() as u16 - 1);
+                let end_y = cmp::min(screen_y*8 + 8 - sy%8 - 1, state_end_y);
+
+                if start_x > end_x || start_y > end_y {
+                    continue;
+                }
+
+                self.draw_tile(state_idx, n, tile_x, tile_y, start_x, start_y, end_x, end_y,
+                          off_x, off_y);
+            }
+        }
 
         for s in 0..64 {
             let (x,  y, height, pattern_addr, palette, priority, fh, fv) = self.get_sprite_attrs(s, state_idx);
             if y >= 0xF0 { continue; }
             if y <= 2 { continue; }
-            if y > end_y { continue; }
-            if y + (height as u16) < start_y { continue; }
+            if y > state_end_y { continue; }
+            if y + (height as u16) < state_start_y { continue; }
 
             for i in 0..(height/8) {
                 for py in 0..8 {
@@ -518,8 +519,8 @@ impl Ppu {
                         };
 
                         if real_x >= self.output_canvas.width()
-                            || real_y > end_y as u32
-                            || real_y < start_y as u32 {
+                            || real_y > state_end_y as u32
+                            || real_y < state_start_y as u32 {
                             continue;
                         }
 
@@ -554,16 +555,28 @@ impl Ppu {
             }
         }
 
-        for i in 0..self.states.len() {
-            let start_y = (self.states[i].count*3/341) as u16 - VBL as u16;
-            let end_y = if i < self.states.len()-1 {
-                cmp::max((self.states[i+1].count*3/341) as u16 - VBL as u16, 1)
-            } else {
-                self.output_canvas.height() as u16
-            };
-            if end_y < start_y { continue; }
+//        for i in 0..self.states.len() {
+//            let start_y = (self.states[i].count*3/341) as u16 - VBL as u16;
+//            let end_y = if i < self.states.len()-1 {
+//                cmp::max((self.states[i+1].count*3/341) as u16 - VBL as u16, 1)
+//            } else {
+//                self.output_canvas.height() as u16
+//            };
+//            if end_y < start_y { continue; }
+//
+//            self.draw_with_state(i, start_y, end_y-1);
+//        }
 
-            self.draw_with_state(i, start_y, end_y-1);
+        let l = self.states.len()-1;
+        {
+            let s = self.states.get_mut(l).unwrap();
+            s.ppuscroll_y = s.ppuscroll_x;
+            s.ppuscroll_x = 0;
+        }
+        self.draw_with_state(l, 100, 200);
+        for x in 0..32*8 {
+            self.bg_output[x as usize][100] = 2;
+            self.bg_output[x as usize][200] = 2;
         }
 
         for x in 0..self.output_canvas.width() {
