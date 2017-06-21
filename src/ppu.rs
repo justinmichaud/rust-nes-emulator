@@ -280,6 +280,10 @@ impl Ppu {
             0x2006 => {
                 if self.ppuscroll_ppuaddr_pick {
                     self.ppuaddr_lo = val;
+
+                    // For NESDoug's SPACY, it uses a weird vertical blanking trick
+                    // I am not going to worry about it for now
+                    // https://forums.nesdev.com/viewtopic.php?f=2&t=15351
                 }
                 else {
                     self.ppuaddr_hi = val;
