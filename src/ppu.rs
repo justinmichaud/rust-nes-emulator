@@ -656,6 +656,7 @@ impl Mem for Ppu {
             0x3F1C => self.read(0x3F0C),
             0x3F00...0x3F1F => self.palette_rame[addr as usize - 0x3F00],
             0x3F20...0x3FFF => self.read(mirror_addr(0x3F20...0x3FFF, 0x3F00...0x3F1F, addr)),
+            0x4000...0xFFFF => self.read(mirror_addr(0x0000...0x3FFF, 0x4000...0xFFFF, addr)),
             _ => {
                 panic!("Read from invalid ppu address {:X}", addr);
             }
@@ -688,6 +689,7 @@ impl Mem for Ppu {
             0x3F1C => self.write(0x3F0C, val),
             0x3F00...0x3F1F => self.palette_rame[addr as usize - 0x3F00] = val,
             0x3F20...0x3FFF => self.write(mirror_addr(0x3F20...0x3FFF, 0x3F00...0x3F1F, addr), val),
+            0x4000...0xFFFF => self.write(mirror_addr(0x0000...0x3FFF, 0x4000...0xFFFF, addr), val),
             _ => {
                 panic!("Write to invalid ppu address {:X}", addr);
             }
