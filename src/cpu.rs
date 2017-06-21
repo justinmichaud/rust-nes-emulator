@@ -604,7 +604,13 @@ fn manual(cpu: &mut Cpu, mem: &mut Mem, op: u8) {
         0x58 => cpu.irq_disable = false, //CLI
         0x78 => cpu.irq_disable = true, //SEI
         0xB8 => cpu.overflow = false, //CLV
+        0x1A => (), //NOP
+        0x3A => (), //NOP
+        0x5A => (), //NOP
+        0x7A => (), //NOP
+        0xDA => (), //NOP
         0xEA => (), //NOP
+        0xFA => (), //NOP
         0xAA => { //TAX
             cpu.x = cpu.a;
             cpu.zero = cpu.x == 0;
