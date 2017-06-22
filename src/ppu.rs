@@ -340,7 +340,6 @@ impl Ppu {
         let sprite_0_y = self.oam[self.oamaddr as usize] as u32 + 1;
         if self.show_sprites && self.show_background && !self.sprite_0_hit &&
                 y >= sprite_0_y + VBL + 1 && y < sprite_0_y + VBL + 1 + 8 {
-            self.sprite_0_hit = true; // TODO hack to make SMB not crash
             let idx = self.states.len()-1;
             let (sprite_0_x,_,_, pattern_addr, _, _, _, _) = self.get_sprite_attrs(0, idx);
 
