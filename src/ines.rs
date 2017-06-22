@@ -15,6 +15,12 @@ pub struct Flags {
     i_nes: bool
 }
 
+pub fn lines_from_file(filename: &str) -> Vec<String> {
+    let file = File::open(filename).expect("no such file");
+    let buf = BufReader::new(file);
+    buf.lines().map(|l| l.expect("Could not parse line")).collect()
+}
+
 pub fn load_file(file: &str) -> Result<(Flags, Vec<u8>, Vec<u8>)> {
     let file = File::open(file)?;
     let mut buf_reader = BufReader::new(file);

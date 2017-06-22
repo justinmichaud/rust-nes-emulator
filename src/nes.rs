@@ -58,34 +58,32 @@ impl Nes {
     }
 
     pub fn tick(&mut self) {
-        for _ in 0..2 {
-            let frame_time = 263*341/3;
-            while self.cpu.count < frame_time {
-                if self.chipset.ppu_dma_requested {
-                    self.chipset.ppu_dma_requested = false;
-                    self.chipset.ppu.ppudma(self.chipset.ppu_dma_val,
-                                            &mut self.cpu, &mut self.chipset.mem);
-                }
-
-                if self.chipset.ppu_writes_requested.len() > 0 {
-                    for &(addr, val) in &self.chipset.ppu_writes_requested {
-                        self.chipset.ppu.write_main(addr, val, &self.cpu);
-                    }
-                    self.chipset.ppu_writes_requested.clear();
-                }
-
-                self.cpu.tick(&mut self.chipset);
-                self.chipset.ppu.tick(&mut self.cpu);
-
-                if self.cpu.debug {
-                    if get_line().starts_with("d") {
-                        self.cpu.debug = false;
-                    }
-                }
+        let frame_time = 262*341/3;
+        while self.cpu.count < frame_time {
+            if self.chipset.ppu_dma_requested {
+                self.chipset.ppu_dma_requested = false;
+                self.chipset.ppu.ppudma(self.chipset.ppu_dma_val,
+                                        &mut self.cpu, &mut self.chipset.mem);
             }
 
-            self.cpu.count -= frame_time;
+            if self.chipset.ppu_writes_requested.len() > 0 {
+                for &(addr, val) in &self.chipset.ppu_writes_requested {
+                    self.chipset.ppu.write_main(addr, val, &self.cpu);
+                }
+                self.chipset.ppu_writes_requested.clear();
+            }
+
+            self.cpu.tick(&mut self.chipset);
+            self.chipset.ppu.tick(&mut self.cpu);
+
+            if self.cpu.debug {
+                if get_line().starts_with("d") {
+                    self.cpu.debug = false;
+                }
+            }
         }
+
+        self.cpu.count -= frame_time;
     }
 
     pub fn prepare_draw(&mut self, window: &mut PistonWindow) {

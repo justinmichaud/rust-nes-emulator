@@ -21,38 +21,16 @@ mod main_memory;
 use ines::*;
 use nes::*;
 
-fn emulate((flags, prg, chr) : (Flags, Vec<u8>, Vec<u8>)) {
-    println!("Loaded rom with {:?}", flags);
-    let mut window: PistonWindow =
-        WindowSettings::new("Emulator", [256*3, 240*3])
-            .exit_on_esc(true).build().unwrap();
-    window.set_max_fps(30);
-    let mut nes = Nes::new(prg, chr, flags.mapper, flags.prg_ram_size, flags.horiz_mirroring, &mut window);
+const USE_MOVIE: bool = false;
 
-    let mut frames = 0;
-    let mut last_time = Instant::now();
+trait ControllerMethod {
+    fn do_input(&mut self, nes: &mut Nes, e: &Input);
+}
 
-    while let Some(e) = window.next() {
-        if let Some(_) = e.render_args() {
-            frames += 1;
+struct User;
 
-            if frames > 60 {
-                let elapsed = last_time.elapsed();
-                let ms = (elapsed.as_secs() * 1_000) + (elapsed.subsec_nanos() / 1_000_000) as u64;
-                println!("MS per frame: {}", ms/frames);
-                frames = 0;
-                last_time = Instant::now();
-            }
-
-            nes.tick();
-            nes.prepare_draw(&mut window);
-
-            window.draw_2d(&e, |c, g| {
-                clear([0.0; 4], g);
-                nes.draw(c, g);
-            });
-        }
-
+impl ControllerMethod for User {
+    fn do_input(&mut self, nes: &mut Nes, e: &Input) {
         if let Some(button) = e.press_args() {
             match button {
                 Button::Keyboard(Key::D) => nes.cpu.debug = true,
@@ -84,9 +62,89 @@ fn emulate((flags, prg, chr) : (Flags, Vec<u8>, Vec<u8>)) {
     }
 }
 
+struct Movie {
+    input: Box<Vec<String>>
+}
+
+impl ControllerMethod for Movie {
+    fn do_input(&mut self, nes: &mut Nes, _: &Input) {
+        if self.input.is_empty() {
+            return;
+        }
+
+        let line = self.input.remove(0);
+        let mut parts = line.split('|');
+        let mut p1 = match parts.nth(2) {
+            Some(s) => s,
+            _ => return
+        }.chars();
+
+        nes.chipset.controller1.right = ![' ', '.'].contains(&p1.next().unwrap());
+        nes.chipset.controller1.left = ![' ', '.'].contains(&p1.next().unwrap());
+        nes.chipset.controller1.down = ![' ', '.'].contains(&p1.next().unwrap());
+        nes.chipset.controller1.up = ![' ', '.'].contains(&p1.next().unwrap());
+        nes.chipset.controller1.start = ![' ', '.'].contains(&p1.next().unwrap());
+        nes.chipset.controller1.select = ![' ', '.'].contains(&p1.next().unwrap());
+        nes.chipset.controller1.b = ![' ', '.'].contains(&p1.next().unwrap());
+        nes.chipset.controller1.a = ![' ', '.'].contains(&p1.next().unwrap());
+    }
+}
+
+fn emulate((flags, prg, chr) : (Flags, Vec<u8>, Vec<u8>), controller_method: &mut ControllerMethod) {
+    println!("Loaded rom with {:?}", flags);
+    let mut window: PistonWindow =
+        WindowSettings::new("Emulator", [256*3, 240*3])
+            .exit_on_esc(true).build().unwrap();
+    window.set_max_fps(60);
+    let mut nes = Nes::new(prg, chr, flags.mapper, flags.prg_ram_size, flags.horiz_mirroring, &mut window);
+
+    let mut frames = 0;
+    let mut last_time = Instant::now();
+
+    while let Some(e) = window.next() {
+        if let Some(_) = e.render_args() {
+            frames += 1;
+
+            if frames > 60 {
+                let elapsed = last_time.elapsed();
+                let ms = (elapsed.as_secs() * 1_000) + (elapsed.subsec_nanos() / 1_000_000) as u64;
+                println!("MS per frame: {}", ms/frames);
+                frames = 0;
+                last_time = Instant::now();
+            }
+
+            let speedup = if USE_MOVIE { 20 } else { 1 };
+            for _ in 0..speedup {
+                if USE_MOVIE {
+                    controller_method.do_input(&mut nes, &e);
+                }
+                nes.tick();
+            }
+            nes.prepare_draw(&mut window);
+
+            window.draw_2d(&e, |c, g| {
+                clear([0.0; 4], g);
+                nes.draw(c, g);
+            });
+        }
+
+        if !USE_MOVIE {
+            controller_method.do_input(&mut nes, &e);
+        }
+    }
+}
+
 fn main() {
+    let mut input: Box<ControllerMethod> = if !USE_MOVIE { Box::new(User) } else {
+//        let mut input_log = lines_from_file("tests/mars608,happylee-smb-warpless,walkathon.fm2");
+        let mut input_log = lines_from_file("tests/happylee-supermariobros,warped.fm2");
+        while !input_log.first().unwrap().starts_with('|') { input_log.remove(0); }
+        input_log.remove(0); //This makes it work for some reason
+        input_log.remove(0);
+        Box::new(Movie { input: Box::new(input_log) })
+    };
     match load_file("tests/smb.nes") {
-        Ok(rom) => emulate(rom),
+        Ok(rom) => emulate(rom, input.as_mut()),
         Err(e) => panic!("Error: {:?}", e)
     }
 }
