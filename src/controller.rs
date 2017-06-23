@@ -1,4 +1,4 @@
-use mem::*;
+use memory::*;
 
 pub struct Controller {
     pub up: bool,
@@ -32,7 +32,7 @@ impl Controller {
 }
 
 impl Mem for Controller {
-    fn read(&mut self, _: u16) -> u8 {
+    fn read(&mut self, _: &mut Box<Mapper>, _: u16) -> u8 {
         let res = if self.strobe {
             self.a
         }
@@ -57,7 +57,7 @@ impl Mem for Controller {
         if res { 1 } else { 0 }
     }
 
-    fn write(&mut self, _: u16, val: u8) {
+    fn write(&mut self, _: &mut Box<Mapper>, _: u16, val: u8) {
         self.strobe = val&0b0000001>0;
         self.count = 0;
     }

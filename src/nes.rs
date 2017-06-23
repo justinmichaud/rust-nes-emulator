@@ -1,10 +1,10 @@
 use cpu::*;
-use mem::*;
+use memory::*;
 use controller::*;
-use main_memory::*;
 use ppu::*;
 use std::io;
 use piston_window::*;
+use mapper_0::*;
 
 pub struct Nes {
     pub cpu: Cpu,
@@ -12,7 +12,8 @@ pub struct Nes {
 }
 
 pub struct Chipset {
-    pub mem: MainMemory,
+    pub mapper: Box<Mapper>,
+    pub mem: Memory,
     pub ppu: Ppu,
     pub controller1: Controller,
     pub controller2: Controller,
@@ -36,17 +37,22 @@ fn get_line() -> String {
 impl Nes {
     pub fn new(prg: Vec<u8>, mut chr: Vec<u8>, mapper: u8, prg_ram_size: usize,
                horiz_mapping: bool, window: &mut PistonWindow) -> Nes {
-        let mut mem = MainMemory::new(prg, prg_ram_size, mapper);
-
         if chr.len() == 0 {
             chr = vec![0; 8*1024];
         }
 
+        let mut mem = Memory::new();
+        let mut mapper = Box::new(match mapper {
+            0 => Mapper0::new(prg, prg_ram_size, chr),
+            _ => panic!()
+        }) as Box<Mapper>;
+
         Nes {
-            cpu: Cpu::new(mem.read16(0xFFFC)),
+            cpu: Cpu::new(mem.read16(&mut mapper, 0xFFFC)),
             chipset: Chipset {
+                mapper: mapper,
                 mem: mem,
-                ppu: Ppu::new(chr, horiz_mapping, window),
+                ppu: Ppu::new(horiz_mapping, window),
                 ppu_dma_requested: false,
                 ppu_dma_val: 0,
                 controller1: Controller::new(),
@@ -62,19 +68,19 @@ impl Nes {
         while self.cpu.count < frame_time {
             if self.chipset.ppu_dma_requested {
                 self.chipset.ppu_dma_requested = false;
-                self.chipset.ppu.ppudma(self.chipset.ppu_dma_val,
+                self.chipset.ppu.ppudma(&mut self.chipset.mapper, self.chipset.ppu_dma_val,
                                         &mut self.cpu, &mut self.chipset.mem);
             }
 
             if self.chipset.ppu_writes_requested.len() > 0 {
                 for &(addr, val) in &self.chipset.ppu_writes_requested {
-                    self.chipset.ppu.write_main(addr, val, &self.cpu);
+                    self.chipset.ppu.write_main(&mut self.chipset.mapper, addr, val, &self.cpu);
                 }
                 self.chipset.ppu_writes_requested.clear();
             }
 
             self.cpu.tick(&mut self.chipset);
-            self.chipset.ppu.tick(&mut self.cpu);
+            self.chipset.ppu.tick(&mut self.cpu, &mut self.chipset.mapper);
 
             if self.cpu.debug {
                 if get_line().starts_with("d") {
@@ -87,7 +93,7 @@ impl Nes {
     }
 
     pub fn prepare_draw(&mut self, window: &mut PistonWindow) {
-        self.chipset.ppu.prepare_draw(window)
+        self.chipset.ppu.prepare_draw(&mut self.chipset.mapper, window)
     }
 
     pub fn draw(&mut self, c: Context, g: &mut G2d) {
@@ -95,20 +101,20 @@ impl Nes {
     }
 }
 
-impl Mem for Chipset {
-    fn read(&mut self, addr: u16) -> u8 {
+impl Chipset {
+    pub fn read(&mut self, addr: u16) -> u8 {
         match addr as usize {
-            0x2000 ... 0x2007 => self.ppu.read_main(addr),
+            0x2000 ... 0x2007 => self.ppu.read_main(&mut self.mapper, addr),
             0x2008...0x3FFF => self.read(mirror_addr(0x2000...0x2007, 0x2008...0x3FFF, addr)),
-            0x4014 => self.ppu.read_main(addr),
-            0x4016 => self.controller1.read(addr),
-            0x4017 => self.controller2.read(addr),
+            0x4014 => self.ppu.read_main(&mut self.mapper, addr),
+            0x4016 => self.controller1.read(&mut self.mapper, addr),
+            0x4017 => self.controller2.read(&mut self.mapper, addr),
             0x4000 ... 0x4017 => 0 /* apu */,
-            _ => self.mem.read(addr)
+            _ => self.mem.read(&mut self.mapper, addr)
         }
     }
 
-    fn write(&mut self, addr: u16, val: u8) {
+    pub fn write(&mut self, addr: u16, val: u8) {
         match addr as usize {
             0x2000 ... 0x2007 => {
                 self.ppu_writes_requested.push((addr, val));
@@ -119,11 +125,20 @@ impl Mem for Chipset {
                 self.ppu_dma_val = val;
             },
             0x4016 => {
-                self.controller1.write(addr, val);
-                self.controller2.write(addr, val);
+                self.controller1.write(&mut self.mapper, addr, val);
+                self.controller2.write(&mut self.mapper, addr, val);
             },
             0x4000 ... 0x4017 => () /* apu */,
-            _ => self.mem.write(addr, val)
+            _ => self.mem.write(&mut self.mapper, addr, val)
         }
+    }
+
+    pub fn read16(&mut self, addr: u16) -> u16 {
+        self.read(addr) as u16 + ((self.read(addr+1) as u16)<<8)
+    }
+
+    fn write16(&mut self, addr: u16, val: u16) {
+        self.write(addr, (val&0x00FF) as u8);
+        self.write(addr+1, ((val&0xFF00)>>8) as u8);
     }
 }

@@ -1,10 +1,10 @@
-use mem::*;
 use cpu::*;
 
 use std::cmp;
 use piston_window::*;
 use texture::Filter;
 use image;
+use memory::*;
 
 static VBL: u32 = 21;
 
@@ -92,7 +92,6 @@ struct MidframeState {
 }
 
 pub struct Ppu {
-    chr: Vec<u8>,
     vram: [u8; 2*1024],
     palette_rame: [u8; 32],
     horiz_mapping: bool,
@@ -141,11 +140,10 @@ pub struct Ppu {
 }
 
 impl Ppu {
-    pub fn new(chr: Vec<u8>, horiz_mapping: bool, window: &mut PistonWindow) -> Ppu {
+    pub fn new(horiz_mapping: bool, window: &mut PistonWindow) -> Ppu {
         let (out_canvas, out_texture) = make_texture(32 * 8, 30 * 8, window);
 
         Ppu {
-            chr: chr,
             vram: [0; 2 * 1024],
             horiz_mapping: horiz_mapping,
             palette_rame: [0; 32],
@@ -214,7 +212,7 @@ impl Ppu {
         self.states.push(state);
     }
 
-    pub fn read_main(&mut self, addr: u16) -> u8 {
+    pub fn read_main(&mut self, mapper: &mut Box<Mapper>, addr: u16) -> u8 {
         match addr as usize {
             0x2002 => {
                 let blanking = self.vertical_blanking;
@@ -229,7 +227,7 @@ impl Ppu {
             0x2007 => {
                 let addr = ((self.ppuaddr_lo as u16)&0x00FF)
                     + (((self.ppuaddr_hi as u16)&0xFF)<<8);
-                let val = self.read(addr);
+                let val = self.read(mapper, addr);
                 self.increment_ppuaddr();
                 val
             },
@@ -239,7 +237,7 @@ impl Ppu {
         }
     }
 
-    pub fn write_main(&mut self, addr: u16, val: u8, cpu: &Cpu) {
+    pub fn write_main(&mut self, mapper: &mut Box<Mapper>, addr: u16, val: u8, cpu: &Cpu) {
         match addr as usize {
             0x2000 => {
                 self.nametable              = val&0b00000011;
@@ -293,7 +291,7 @@ impl Ppu {
             0x2007 => {
                 let addr = ((self.ppuaddr_lo as u16)&0x00FF)
                     + (((self.ppuaddr_hi as u16)&0xFF)<<8);
-                self.write(addr, val);
+                self.write(mapper, addr, val);
                 self.increment_ppuaddr()
             },
             _ => {
@@ -302,7 +300,7 @@ impl Ppu {
         }
     }
 
-    pub fn ppudma(&mut self, val: u8, cpu: &mut Cpu, mem: &mut Mem) {
+    pub fn ppudma(&mut self, mapper: &mut Box<Mapper>, val: u8, cpu: &mut Cpu, mem: &mut Mem) {
         cpu.count += 1;
         cpu.count += cpu.count%2;
         cpu.count += 512;
@@ -310,11 +308,11 @@ impl Ppu {
         let addr = ((val as u16)&0x00FF)<<8;
         for i in 0...255 {
             self.oam[self.oamaddr.wrapping_add(i) as usize]
-                = mem.read(addr + i as u16);
+                = mem.read(mapper, addr + i as u16);
         }
     }
 
-    pub fn tick(&mut self, cpu: &mut Cpu) {
+    pub fn tick(&mut self, cpu: &mut Cpu, mapper: &mut Box<Mapper>) {
         let y = cpu.count*3/341;
 
         if y < VBL && !self.has_blanked {
@@ -348,15 +346,15 @@ impl Ppu {
 
                 // This could be more efficient, but what the hell
                 self.show_sprites = false;
-                self.draw_with_state(idx, sprite_0_y as u16, sprite_0_y as u16 + 8);
+                self.draw_with_state(idx, sprite_0_y as u16, sprite_0_y as u16 + 8, mapper);
                 self.show_sprites = true;
             }
 
             let py = y as u16 - sprite_0_y as u16  - VBL as u16 - 1;
 
             // Who cares about 16px sprites!
-            let lo = self.read(pattern_addr + py);
-            let hi = self.read(pattern_addr + py + 8);
+            let lo = self.read(mapper, pattern_addr + py);
+            let hi = self.read(mapper, pattern_addr + py + 8);
 
             for px in 0..8 {
                 let mask = 0b00000001<<(7-px);
@@ -377,7 +375,7 @@ impl Ppu {
 
     fn draw_tile(&mut self, state_idx: usize, nametable: u8, tile_x: u16, tile_y: u16,
             screen_x_start: u16, screen_y_start: u16, screen_x_end: u16, screen_y_end: u16,
-            x_offset: u16, y_offset: u16) {
+            x_offset: u16, y_offset: u16, mapper: &mut Box<Mapper>) {
         let nametable = match nametable {
             0 => 0x2000,
             1 => 0x2400,
@@ -392,20 +390,20 @@ impl Ppu {
             _ => panic!("Background table {} not recognized", self.states[state_idx].backgroundtable)
         };
 
-        let pattern_number = self.read(nametable + tile_x + 32*tile_y);
+        let pattern_number = self.read(mapper, nametable + tile_x + 32*tile_y);
 
         let attr_x = tile_x/4;
         let attr_y = tile_y/4;
         let over_x = (tile_x/2)%2;
         let over_y = (tile_y/2)%2;
-        let attr = self.read(nametable + 0x3C0 + attr_x + 8*attr_y);
+        let attr = self.read(mapper, nametable + 0x3C0 + attr_x + 8*attr_y);
         let mask = 0b00000011 << (4*over_y + 2*over_x);
         let colour_bits = ((attr&(mask)) >> (4*over_y + 2*over_x))<<2;
 
         let pattern_addr = bg_pattern as u16 + 16*pattern_number as u16;
         for y in y_offset...(screen_y_end-screen_y_start+y_offset) {
-            let lo = self.read(pattern_addr + y);
-            let hi = self.read(pattern_addr + y + 8);
+            let lo = self.read(mapper, pattern_addr + y);
+            let hi = self.read(mapper, pattern_addr + y + 8);
 
             for x in x_offset...(screen_x_end-screen_x_start+x_offset) {
                 let mask = 0b00000001<<(7-x);
@@ -456,7 +454,8 @@ impl Ppu {
         (x, y, height, pattern_addr, palette, priority, fh, fv)
     }
 
-    fn draw_with_state(&mut self, state_idx: usize, state_start_y: u16, state_end_y: u16) {
+    fn draw_with_state(&mut self, state_idx: usize, state_start_y: u16, state_end_y: u16,
+                       mapper: &mut Box<Mapper>) {
         let sx = self.states[state_idx].ppuscroll_x as u16;
         let sy = self.states[state_idx].ppuscroll_y as u16;
         let base_nt = self.states[state_idx].nametable;
@@ -500,7 +499,7 @@ impl Ppu {
                 }
 
                 self.draw_tile(state_idx, n, tile_x, tile_y, start_x, start_y, end_x, end_y,
-                          off_x, off_y);
+                          off_x, off_y, mapper);
             }
         }
 
@@ -513,8 +512,8 @@ impl Ppu {
 
             for i in 0..(height/8) {
                 for py in 0..8 {
-                    let lo = self.read(pattern_addr + 16*i as u16 + py);
-                    let hi = self.read(pattern_addr + 16*i as u16 + py + 8);
+                    let lo = self.read(mapper, pattern_addr + 16*i as u16 + py);
+                    let hi = self.read(mapper, pattern_addr + 16*i as u16 + py + 8);
 
                     for px in 0..8 {
                         let real_x = if !fh {
@@ -556,7 +555,7 @@ impl Ppu {
         }
     }
 
-    pub fn prepare_draw(&mut self, window: &mut PistonWindow) {
+    pub fn prepare_draw(&mut self, mapper: &mut Box<Mapper>, window: &mut PistonWindow) {
         for x in 0..self.output_canvas.width() {
             for y in 0..self.output_canvas.height() {
                 self.sprite_output[x as usize][y as usize] = 0;
@@ -575,7 +574,7 @@ impl Ppu {
             };
             if end_y < start_y { continue; }
 
-            self.draw_with_state(i, start_y, end_y-1);
+            self.draw_with_state(i, start_y, end_y-1, mapper);
         }
 
         for x in 0..self.output_canvas.width() {
@@ -592,7 +591,7 @@ impl Ppu {
                     bg
                 };
 
-                let hsv = (self.read(p_idx) & mask) as usize;
+                let hsv = (self.read(mapper, p_idx) & mask) as usize;
                 self.output_canvas.put_pixel(x, y, image::Rgba([PALETTE[hsv * 3],
                     PALETTE[hsv * 3 + 1],
                     PALETTE[hsv * 3 + 2], 0xFF]));
@@ -634,9 +633,9 @@ fn make_texture(width: u32, height: u32, window: &mut PistonWindow)
 }
 
 impl Mem for Ppu {
-    fn read(&mut self, addr: u16) -> u8 {
+    fn read(&mut self, mapper: &mut Box<Mapper>, addr: u16) -> u8 {
         match addr as usize {
-            0x0000...0x1FFF => self.chr[addr as usize],
+            0x0000...0x1FFF => mapper.read_ppu(addr),
             0x2000...0x23FF => self.vram[addr as usize - 0x2000],
             0x2400...0x27FF => {
                 if self.horiz_mapping {
@@ -653,23 +652,23 @@ impl Mem for Ppu {
                 }
             },
             0x2C00...0x2FFF => self.vram[addr as usize - 0x2800],
-            0x3000...0x3EFF => self.read(mirror_addr(0x2000...0x2FFF, 0x3000...0x3EFF, addr)),
-            0x3F10 => self.read(0x3F00),
-            0x3F14 => self.read(0x3F04),
-            0x3F18 => self.read(0x3F08),
-            0x3F1C => self.read(0x3F0C),
+            0x3000...0x3EFF => self.read(mapper, mirror_addr(0x2000...0x2FFF, 0x3000...0x3EFF, addr)),
+            0x3F10 => self.read(mapper, 0x3F00),
+            0x3F14 => self.read(mapper, 0x3F04),
+            0x3F18 => self.read(mapper, 0x3F08),
+            0x3F1C => self.read(mapper, 0x3F0C),
             0x3F00...0x3F1F => self.palette_rame[addr as usize - 0x3F00],
-            0x3F20...0x3FFF => self.read(mirror_addr(0x3F20...0x3FFF, 0x3F00...0x3F1F, addr)),
-            0x4000...0xFFFF => self.read(mirror_addr(0x0000...0x3FFF, 0x4000...0xFFFF, addr)),
+            0x3F20...0x3FFF => self.read(mapper, mirror_addr(0x3F20...0x3FFF, 0x3F00...0x3F1F, addr)),
+            0x4000...0xFFFF => self.read(mapper, mirror_addr(0x0000...0x3FFF, 0x4000...0xFFFF, addr)),
             _ => {
                 panic!("Read from invalid ppu address {:X}", addr);
             }
         }
     }
 
-    fn write(&mut self, addr: u16, val: u8) {
+    fn write(&mut self, mapper: &mut Box<Mapper>, addr: u16, val: u8) {
         match addr as usize {
-            0x0000...0x1FFF => self.chr[addr as usize] = val,
+            0x0000...0x1FFF => mapper.write_ppu(addr, val),
             0x2000...0x23FF => self.vram[addr as usize - 0x2000] = val,
             0x2400...0x27FF => {
                 if self.horiz_mapping {
@@ -686,14 +685,14 @@ impl Mem for Ppu {
                 }
             },
             0x2C00...0x2FFF => self.vram[addr as usize - 0x2800] = val,
-            0x3000...0x3EFF => self.write(mirror_addr(0x2000...0x2FFF, 0x3000...0x3EFF, addr), val),
-            0x3F10 => self.write(0x3F00, val),
-            0x3F14 => self.write(0x3F04, val),
-            0x3F18 => self.write(0x3F08, val),
-            0x3F1C => self.write(0x3F0C, val),
+            0x3000...0x3EFF => self.write(mapper, mirror_addr(0x2000...0x2FFF, 0x3000...0x3EFF, addr), val),
+            0x3F10 => self.write(mapper, 0x3F00, val),
+            0x3F14 => self.write(mapper, 0x3F04, val),
+            0x3F18 => self.write(mapper, 0x3F08, val),
+            0x3F1C => self.write(mapper, 0x3F0C, val),
             0x3F00...0x3F1F => self.palette_rame[addr as usize - 0x3F00] = val,
-            0x3F20...0x3FFF => self.write(mirror_addr(0x3F20...0x3FFF, 0x3F00...0x3F1F, addr), val),
-            0x4000...0xFFFF => self.write(mirror_addr(0x0000...0x3FFF, 0x4000...0xFFFF, addr), val),
+            0x3F20...0x3FFF => self.write(mapper, mirror_addr(0x3F20...0x3FFF, 0x3F00...0x3F1F, addr), val),
+            0x4000...0xFFFF => self.write(mapper, mirror_addr(0x0000...0x3FFF, 0x4000...0xFFFF, addr), val),
             _ => {
                 panic!("Write to invalid ppu address {:X}", addr);
             }

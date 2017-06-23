@@ -1,4 +1,4 @@
-use mem::*;
+use nes::Chipset;
 use phf::Map;
 use std::fmt;
 
@@ -24,7 +24,7 @@ impl fmt::Debug for AddressModeResult {
 }
 
 impl AddressModeResult {
-    fn read(&self, cpu: &Cpu, mem: &mut Mem) -> u8 {
+    fn read(&self, cpu: &Cpu, mem: &mut Chipset) -> u8 {
         match *self {
             Val(val) => val,
             Addr(addr) => mem.read(addr),
@@ -34,7 +34,7 @@ impl AddressModeResult {
         }
     }
 
-    fn write(&self, cpu: &mut Cpu, mem: &mut Mem, val: u8) {
+    fn write(&self, cpu: &mut Cpu, mem: &mut Chipset, val: u8) {
         match *self {
             Addr(addr) => mem.write(addr, val),
             Accumulator => cpu.a = val,
@@ -45,8 +45,8 @@ impl AddressModeResult {
     }
 }
 
-type AddressMode = fn(&mut Cpu, &mut Mem, bool) -> AddressModeResult;
-type ALUOperation = fn(&mut Cpu, &mut Mem, AddressMode) -> ();
+type AddressMode = fn(&mut Cpu, &mut Chipset, bool) -> AddressModeResult;
+type ALUOperation = fn(&mut Cpu, &mut Chipset, AddressMode) -> ();
 
 const OPCODES: Map<u8, (ALUOperation, AddressMode)> = phf_map!{
     // ADC
@@ -249,40 +249,40 @@ pub struct Cpu {
     nmi_waiting: bool,
 }
 
-fn immediate(cpu: &mut Cpu, mem: &mut Mem, _: bool) -> AddressModeResult {
+fn immediate(cpu: &mut Cpu, mem: &mut Chipset, _: bool) -> AddressModeResult {
     cpu.pc += 1;
     cpu.count += 2;
     Val(mem.read(cpu.pc-1))
 }
 
-fn zero_page(cpu: &mut Cpu, mem: &mut Mem, _: bool) -> AddressModeResult {
+fn zero_page(cpu: &mut Cpu, mem: &mut Chipset, _: bool) -> AddressModeResult {
     let arg = mem.read(cpu.pc);
     cpu.pc += 1;
     cpu.count += 3;
     Addr(arg as u16)
 }
 
-fn zero_page_x(cpu: &mut Cpu, mem: &mut Mem, _: bool) -> AddressModeResult {
+fn zero_page_x(cpu: &mut Cpu, mem: &mut Chipset, _: bool) -> AddressModeResult {
     let arg = mem.read(cpu.pc);
     cpu.pc += 1;
     cpu.count += 4;
     Addr((arg as u16 + cpu.x as u16) % 256)
 }
 
-fn zero_page_y(cpu: &mut Cpu, mem: &mut Mem, _: bool) -> AddressModeResult {
+fn zero_page_y(cpu: &mut Cpu, mem: &mut Chipset, _: bool) -> AddressModeResult {
     let arg = mem.read(cpu.pc);
     cpu.pc += 1;
     cpu.count += 4;
     Addr((arg as u16 + cpu.y as u16) % 256)
 }
 
-fn absolute(cpu: &mut Cpu, mem: &mut Mem, _: bool) -> AddressModeResult {
+fn absolute(cpu: &mut Cpu, mem: &mut Chipset, _: bool) -> AddressModeResult {
     cpu.pc += 2;
     cpu.count += 4;
     Addr(mem.read16(cpu.pc-2))
 }
 
-fn absolute_x(cpu: &mut Cpu, mem: &mut Mem, page_matters: bool) -> AddressModeResult {
+fn absolute_x(cpu: &mut Cpu, mem: &mut Chipset, page_matters: bool) -> AddressModeResult {
     let arg = mem.read16(cpu.pc);
     cpu.pc += 2;
     cpu.count += 4;
@@ -295,7 +295,7 @@ fn absolute_x(cpu: &mut Cpu, mem: &mut Mem, page_matters: bool) -> AddressModeRe
     Addr(addr)
 }
 
-fn absolute_y(cpu: &mut Cpu, mem: &mut Mem, page_matters: bool) -> AddressModeResult {
+fn absolute_y(cpu: &mut Cpu, mem: &mut Chipset, page_matters: bool) -> AddressModeResult {
     let arg = mem.read16(cpu.pc);
     cpu.pc += 2;
     cpu.count += 4;
@@ -308,7 +308,7 @@ fn absolute_y(cpu: &mut Cpu, mem: &mut Mem, page_matters: bool) -> AddressModeRe
     Addr(addr)
 }
 
-fn indirect_x(cpu: &mut Cpu, mem: &mut Mem, _: bool) -> AddressModeResult {
+fn indirect_x(cpu: &mut Cpu, mem: &mut Chipset, _: bool) -> AddressModeResult {
     let arg = mem.read(cpu.pc);
     cpu.pc += 1;
     cpu.count += 6;
@@ -316,7 +316,7 @@ fn indirect_x(cpu: &mut Cpu, mem: &mut Mem, _: bool) -> AddressModeResult {
         + (mem.read((arg as u16 + cpu.x as u16 + 1) % 256) as u16)*256)
 }
 
-fn indirect_y(cpu: &mut Cpu, mem: &mut Mem, page_matters: bool) -> AddressModeResult {
+fn indirect_y(cpu: &mut Cpu, mem: &mut Chipset, page_matters: bool) -> AddressModeResult {
     let arg = mem.read(cpu.pc);
     cpu.pc += 1;
     cpu.count += 5;
@@ -330,19 +330,19 @@ fn indirect_y(cpu: &mut Cpu, mem: &mut Mem, page_matters: bool) -> AddressModeRe
     Addr(base + cpu.y as u16)
 }
 
-fn implied_a(_: &mut Cpu, _: &mut Mem, _: bool) -> AddressModeResult {
+fn implied_a(_: &mut Cpu, _: &mut Chipset, _: bool) -> AddressModeResult {
     Accumulator
 }
 
-fn implied_x(_: &mut Cpu, _: &mut Mem, _: bool) -> AddressModeResult {
+fn implied_x(_: &mut Cpu, _: &mut Chipset, _: bool) -> AddressModeResult {
     X
 }
 
-fn implied_y(_: &mut Cpu, _: &mut Mem, _: bool) -> AddressModeResult {
+fn implied_y(_: &mut Cpu, _: &mut Chipset, _: bool) -> AddressModeResult {
     Y
 }
 
-fn relative(cpu: &mut Cpu, mem: &mut Mem, page_matters: bool) -> AddressModeResult {
+fn relative(cpu: &mut Cpu, mem: &mut Chipset, page_matters: bool) -> AddressModeResult {
     let arg = mem.read(cpu.pc);
     cpu.pc = cpu.pc + 1;
 
@@ -359,7 +359,7 @@ fn relative(cpu: &mut Cpu, mem: &mut Mem, page_matters: bool) -> AddressModeResu
     Addr(rel_addr)
 }
 
-fn adc(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+fn adc(cpu: &mut Cpu, mem: &mut Chipset, mode: AddressMode) {
     let val = mode(cpu, mem, true).read(cpu, mem);
     add_with_carry(cpu, val);
 }
@@ -376,34 +376,34 @@ fn add_with_carry(cpu: &mut Cpu, val: u8) {
     cpu.negative = cpu.a&0b10000000 > 0;
 }
 
-fn sbc(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+fn sbc(cpu: &mut Cpu, mem: &mut Chipset, mode: AddressMode) {
     let val = mode(cpu, mem, true).read(cpu, mem);
     // Flip the bits for 2s compliment, but rely on carry to add 1
     add_with_carry(cpu, !val);
 }
 
-fn and(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+fn and(cpu: &mut Cpu, mem: &mut Chipset, mode: AddressMode) {
     let val = mode(cpu, mem, true).read(cpu, mem);
     cpu.a = cpu.a&val;
     cpu.zero = cpu.a == 0;
     cpu.negative = cpu.a&0b10000000 > 0;
 }
 
-fn ora(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+fn ora(cpu: &mut Cpu, mem: &mut Chipset, mode: AddressMode) {
     let val = mode(cpu, mem, true).read(cpu, mem);
     cpu.a = cpu.a|val;
     cpu.zero = cpu.a == 0;
     cpu.negative = cpu.a&0b10000000 > 0;
 }
 
-fn eor(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+fn eor(cpu: &mut Cpu, mem: &mut Chipset, mode: AddressMode) {
     let val = mode(cpu, mem, true).read(cpu, mem);
     cpu.a = cpu.a^val;
     cpu.zero = cpu.a == 0;
     cpu.negative = cpu.a&0b10000000 > 0;
 }
 
-fn asl(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+fn asl(cpu: &mut Cpu, mem: &mut Chipset, mode: AddressMode) {
     let r = mode(cpu, mem, false);
     let val = r.read(cpu, mem);
     cpu.count = cpu.count + 2;
@@ -416,7 +416,7 @@ fn asl(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
     cpu.negative = result&0b10000000 > 0;
 }
 
-fn lsr(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+fn lsr(cpu: &mut Cpu, mem: &mut Chipset, mode: AddressMode) {
     let r = mode(cpu, mem, false);
     let val = r.read(cpu, mem);
     cpu.count = cpu.count + 2;
@@ -429,7 +429,7 @@ fn lsr(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
     cpu.negative = result&0b10000000 > 0;
 }
 
-fn rol(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+fn rol(cpu: &mut Cpu, mem: &mut Chipset, mode: AddressMode) {
     let r = mode(cpu, mem, false);
     let val = r.read(cpu, mem);
     cpu.count = cpu.count + 2;
@@ -443,7 +443,7 @@ fn rol(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
     cpu.negative = result&0b10000000 > 0;
 }
 
-fn ror(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+fn ror(cpu: &mut Cpu, mem: &mut Chipset, mode: AddressMode) {
     let r = mode(cpu, mem, false);
     let val = r.read(cpu, mem);
     cpu.count = cpu.count + 2;
@@ -457,7 +457,7 @@ fn ror(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
     cpu.negative = result&0b10000000 > 0;
 }
 
-fn bit(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+fn bit(cpu: &mut Cpu, mem: &mut Chipset, mode: AddressMode) {
     let val = mode(cpu, mem, true).read(cpu, mem);
 
     cpu.zero = val & cpu.a == 0;
@@ -465,7 +465,7 @@ fn bit(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
     cpu.overflow = val & 0b01000000 > 0;
 }
 
-fn cmp(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+fn cmp(cpu: &mut Cpu, mem: &mut Chipset, mode: AddressMode) {
     let a = cpu.a;
     let overflow = cpu.overflow;
     cpu.carry = true;
@@ -474,7 +474,7 @@ fn cmp(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
     cpu.overflow = overflow;
 }
 
-fn cpx(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+fn cpx(cpu: &mut Cpu, mem: &mut Chipset, mode: AddressMode) {
     let a = cpu.a;
     let overflow = cpu.overflow;
     cpu.carry = true;
@@ -484,7 +484,7 @@ fn cpx(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
     cpu.overflow = overflow;
 }
 
-fn cpy(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+fn cpy(cpu: &mut Cpu, mem: &mut Chipset, mode: AddressMode) {
     let a = cpu.a;
     let overflow = cpu.overflow;
     cpu.carry = true;
@@ -494,7 +494,7 @@ fn cpy(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
     cpu.overflow = overflow;
 }
 
-fn inc(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+fn inc(cpu: &mut Cpu, mem: &mut Chipset, mode: AddressMode) {
     let r = mode(cpu, mem, false);
     let val = r.read(cpu, mem);
     cpu.count = cpu.count + 2;
@@ -506,7 +506,7 @@ fn inc(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
     cpu.negative = result&0b10000000 > 0;
 }
 
-fn dec(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+fn dec(cpu: &mut Cpu, mem: &mut Chipset, mode: AddressMode) {
     let r = mode(cpu, mem, false);
     let val = r.read(cpu, mem);
     cpu.count = cpu.count + 2;
@@ -518,7 +518,7 @@ fn dec(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
     cpu.negative = result&0b10000000 > 0;
 }
 
-fn jump(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode, cond: bool) {
+fn jump(cpu: &mut Cpu, mem: &mut Chipset, mode: AddressMode, cond: bool) {
     cpu.count += 2;
     let count = cpu.count;
     let val = match mode(cpu, mem, true) {
@@ -535,68 +535,68 @@ fn jump(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode, cond: bool) {
     cpu.pc = val;
 }
 
-fn bpl(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+fn bpl(cpu: &mut Cpu, mem: &mut Chipset, mode: AddressMode) {
     let cond = !cpu.negative;
     jump(cpu, mem, mode, cond);
 }
 
-fn bmi(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+fn bmi(cpu: &mut Cpu, mem: &mut Chipset, mode: AddressMode) {
     let cond = cpu.negative;
     jump(cpu, mem, mode, cond);
 }
 
-fn bvc(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+fn bvc(cpu: &mut Cpu, mem: &mut Chipset, mode: AddressMode) {
     let cond = !cpu.overflow;
     jump(cpu, mem, mode, cond);
 }
 
-fn bvs(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+fn bvs(cpu: &mut Cpu, mem: &mut Chipset, mode: AddressMode) {
     let cond = cpu.overflow;
     jump(cpu, mem, mode, cond);
 }
 
-fn bcc(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+fn bcc(cpu: &mut Cpu, mem: &mut Chipset, mode: AddressMode) {
     let cond = !cpu.carry;
     jump(cpu, mem, mode, cond);
 }
 
-fn bcs(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+fn bcs(cpu: &mut Cpu, mem: &mut Chipset, mode: AddressMode) {
     let cond = cpu.carry;
     jump(cpu, mem, mode, cond);
 }
 
-fn bne(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+fn bne(cpu: &mut Cpu, mem: &mut Chipset, mode: AddressMode) {
     let cond = !cpu.zero;
     jump(cpu, mem, mode, cond);
 }
 
-fn beq(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+fn beq(cpu: &mut Cpu, mem: &mut Chipset, mode: AddressMode) {
     let cond = cpu.zero;
     jump(cpu, mem, mode, cond);
 }
 
-fn lda(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+fn lda(cpu: &mut Cpu, mem: &mut Chipset, mode: AddressMode) {
     let val = mode(cpu, mem, true).read(cpu, mem);
     cpu.a = val;
     cpu.zero = cpu.a == 0;
     cpu.negative = cpu.a&0b10000000 > 0;
 }
 
-fn ldx(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+fn ldx(cpu: &mut Cpu, mem: &mut Chipset, mode: AddressMode) {
     let val = mode(cpu, mem, true).read(cpu, mem);
     cpu.x = val;
     cpu.zero = cpu.x == 0;
     cpu.negative = cpu.x&0b10000000 > 0;
 }
 
-fn ldy(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+fn ldy(cpu: &mut Cpu, mem: &mut Chipset, mode: AddressMode) {
     let val = mode(cpu, mem, true).read(cpu, mem);
     cpu.y = val;
     cpu.zero = cpu.y == 0;
     cpu.negative = cpu.y&0b10000000 > 0;
 }
 
-fn manual(cpu: &mut Cpu, mem: &mut Mem, op: u8) {
+fn manual(cpu: &mut Cpu, mem: &mut Chipset, op: u8) {
     cpu.count += 2;
     match op {
         0x18 => cpu.carry = false, //CLC
@@ -697,46 +697,46 @@ fn manual(cpu: &mut Cpu, mem: &mut Mem, op: u8) {
     }
 }
 
-fn sta(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+fn sta(cpu: &mut Cpu, mem: &mut Chipset, mode: AddressMode) {
     let m = mode(cpu, mem, false);
     let a = cpu.a;
     m.write(cpu, mem, a);
 }
 
-fn stx(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+fn stx(cpu: &mut Cpu, mem: &mut Chipset, mode: AddressMode) {
     let m = mode(cpu, mem, false);
     let a = cpu.x;
     m.write(cpu, mem, a);
 }
 
-fn sty(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+fn sty(cpu: &mut Cpu, mem: &mut Chipset, mode: AddressMode) {
     let m = mode(cpu, mem, false);
     let a = cpu.y;
     m.write(cpu, mem, a);
 }
 
-fn push(cpu: &mut Cpu, mem: &mut Mem, val: u8) {
+fn push(cpu: &mut Cpu, mem: &mut Chipset, val: u8) {
     mem.write((0x01u16<<8) + cpu.s as u16, val);
     cpu.s = ((cpu.s as u16).wrapping_sub(1)&0xFF) as u8;
 }
 
-fn push16(cpu: &mut Cpu, mem: &mut Mem, val: u16) {
+fn push16(cpu: &mut Cpu, mem: &mut Chipset, val: u16) {
     push(cpu, mem, ((val&0xFF00)>>8) as u8);
     push(cpu, mem, (val&0x00FF) as u8);
 }
 
-fn pull(cpu: &mut Cpu, mem: &mut Mem) -> u8 {
+fn pull(cpu: &mut Cpu, mem: &mut Chipset) -> u8 {
     cpu.s = ((cpu.s as u16 + 1)&0xFF) as u8;
     mem.read((0x01u16<<8) + cpu.s as u16)
 }
 
-fn pull16(cpu: &mut Cpu, mem: &mut Mem) -> u16 {
+fn pull16(cpu: &mut Cpu, mem: &mut Chipset) -> u16 {
     let lo = pull(cpu, mem);
     let hi = pull(cpu, mem);
     lo as u16 + ((hi as u16)<<8)
 }
 
-fn jsr(cpu: &mut Cpu, mem: &mut Mem, mode: AddressMode) {
+fn jsr(cpu: &mut Cpu, mem: &mut Chipset, mode: AddressMode) {
     cpu.count += 2;
     let val = match mode(cpu, mem, false) {
         Addr(a) => a,
@@ -789,7 +789,7 @@ impl Cpu {
         self.carry          = val&0b00000001>0;
     }
 
-    pub fn tick(&mut self, mem: &mut Mem) {
+    pub fn tick(&mut self, mem: &mut Chipset) {
         //println!("{:X}", self.pc);
         let op = mem.read(self.pc);
         self.pc += 1;
@@ -832,509 +832,5 @@ impl Cpu {
 
     pub fn nmi(&mut self) {
         self.nmi_waiting = true;
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use main_memory::*;
-
-    fn make_cpu() -> (Cpu, MainMemory) {
-        let mut cpu = Cpu::new(0);
-        let mem = MainMemory::new(vec![], 0, 0);
-
-        cpu.a = 0;
-        cpu.negative = false;
-        cpu.overflow = false;
-        cpu.carry = false;
-        cpu.zero = true;
-
-        (cpu, mem)
-    }
-
-    fn run_instr(instr: ALUOperation, arg: u8, cpu: &mut Cpu, mem: &mut Mem) {
-        cpu.pc = 0;
-        mem.write(0, arg);
-        instr(cpu, mem, immediate);
-    }
-
-    #[test]
-    fn adc_test_regular() {
-        let (mut cpu, mut mem) = make_cpu();
-
-        cpu.a = 1;
-        run_instr(adc, 1, &mut cpu, &mut mem);
-        assert_eq!(cpu.a, 2);
-        assert_eq!(cpu.carry, false);
-        assert_eq!(cpu.overflow, false);
-        assert_eq!(cpu.zero, false);
-        assert_eq!(cpu.negative, false);
-        assert_eq!(cpu.count, 2);
-    }
-
-    // See http://www.6502.org/tutorials/vflag.html
-    #[test]
-    fn adc_test_carry() {
-        let (mut cpu, mut mem) = make_cpu();
-
-        cpu.a = 0x01;
-        run_instr(adc, 0xFF, &mut cpu, &mut mem);
-        assert_eq!(cpu.a, 0);
-        assert_eq!(cpu.carry, true);
-        assert_eq!(cpu.overflow, false);
-        assert_eq!(cpu.zero, true);
-        assert_eq!(cpu.negative, false);
-    }
-
-    #[test]
-    fn adc_test_overflow() {
-        let (mut cpu, mut mem) = make_cpu();
-
-        cpu.a = 0x7f;
-        run_instr(adc, 0x01, &mut cpu, &mut mem);
-        assert_eq!(cpu.a, 0x80);
-        assert_eq!(cpu.carry, false);
-        assert_eq!(cpu.overflow, true);
-        assert_eq!(cpu.zero, false);
-        assert_eq!(cpu.negative, true);
-    }
-
-    #[test]
-    fn adc_test_overflow_and_carry() {
-        let (mut cpu, mut mem) = make_cpu();
-
-        cpu.a = 0x80;
-        run_instr(adc, 0xFF, &mut cpu, &mut mem);
-        assert_eq!(cpu.a, 0x7F);
-        assert_eq!(cpu.carry, true);
-        assert_eq!(cpu.overflow, true);
-        assert_eq!(cpu.zero, false);
-        assert_eq!(cpu.negative, false);
-    }
-
-    #[test]
-    fn adc_test_with_carry() {
-        let (mut cpu, mut mem) = make_cpu();
-
-        cpu.carry = true;
-        cpu.a = 1;
-        run_instr(adc, 1, &mut cpu, &mut mem);
-        assert_eq!(cpu.a, 3);
-        assert_eq!(cpu.carry, false);
-        assert_eq!(cpu.overflow, false);
-        assert_eq!(cpu.zero, false);
-        assert_eq!(cpu.negative, false);
-        assert_eq!(cpu.count, 2);
-    }
-
-    #[test]
-    fn sbc_test_regular() {
-        let (mut cpu, mut mem) = make_cpu();
-
-        cpu.a = 1;
-        cpu.carry = true;
-        run_instr(sbc, 1, &mut cpu, &mut mem);
-        assert_eq!(cpu.a, 0);
-        assert_eq!(cpu.carry, true);
-        assert_eq!(cpu.overflow, false);
-        assert_eq!(cpu.zero, true);
-        assert_eq!(cpu.negative, false);
-        assert_eq!(cpu.count, 2);
-    }
-
-    #[test]
-    fn sbc_test_negative() {
-        let (mut cpu, mut mem) = make_cpu();
-
-        cpu.a = 1;
-        cpu.carry = true;
-        run_instr(sbc, 2, &mut cpu, &mut mem);
-        assert_eq!(cpu.a, 0xFF);
-        assert_eq!(cpu.carry, false);
-        assert_eq!(cpu.overflow, false);
-        assert_eq!(cpu.zero, false);
-        assert_eq!(cpu.negative, true);
-        assert_eq!(cpu.count, 2);
-    }
-
-    #[test]
-    fn and_test_regular() {
-        let (mut cpu, mut mem) = make_cpu();
-
-        cpu.a = 1;
-        run_instr(and, 0xFF, &mut cpu, &mut mem);
-        assert_eq!(cpu.a, 1);
-        assert_eq!(cpu.carry, false);
-        assert_eq!(cpu.overflow, false);
-        assert_eq!(cpu.zero, false);
-        assert_eq!(cpu.negative, false);
-        assert_eq!(cpu.count, 2);
-    }
-
-    #[test]
-    fn ora_test_regular() {
-        let (mut cpu, mut mem) = make_cpu();
-
-        cpu.a = 1;
-        run_instr(ora, 0b10000000, &mut cpu, &mut mem);
-        assert_eq!(cpu.a, 0b10000001);
-        assert_eq!(cpu.carry, false);
-        assert_eq!(cpu.overflow, false);
-        assert_eq!(cpu.zero, false);
-        assert_eq!(cpu.negative, true);
-        assert_eq!(cpu.count, 2);
-    }
-
-    #[test]
-    fn eor_test_regular() {
-        let (mut cpu, mut mem) = make_cpu();
-
-        cpu.a = 1;
-        run_instr(eor, 0b10000001, &mut cpu, &mut mem);
-        assert_eq!(cpu.a, 0b10000000);
-        assert_eq!(cpu.carry, false);
-        assert_eq!(cpu.overflow, false);
-        assert_eq!(cpu.zero, false);
-        assert_eq!(cpu.negative, true);
-        assert_eq!(cpu.count, 2);
-    }
-
-    #[test]
-    fn asl_test_regular() {
-        let (mut cpu, mut mem) = make_cpu();
-
-        cpu.a = 0b10000001;
-        asl(&mut cpu, &mut mem, implied_a);
-        assert_eq!(cpu.a, 0b00000010);
-        assert_eq!(cpu.carry, true);
-        assert_eq!(cpu.overflow, false);
-        assert_eq!(cpu.zero, false);
-        assert_eq!(cpu.negative, false);
-        assert_eq!(cpu.count, 2);
-    }
-
-    #[test]
-    fn lsr_test_regular() {
-        let (mut cpu, mut mem) = make_cpu();
-
-        cpu.a = 0b10000001;
-        lsr(&mut cpu, &mut mem, implied_a);
-        assert_eq!(cpu.a, 0b01000000);
-        assert_eq!(cpu.carry, true);
-        assert_eq!(cpu.overflow, false);
-        assert_eq!(cpu.zero, false);
-        assert_eq!(cpu.negative, false);
-        assert_eq!(cpu.count, 2);
-    }
-
-    #[test]
-    fn rol_test_regular() {
-        let (mut cpu, mut mem) = make_cpu();
-
-        cpu.a = 0b10010001;
-        cpu.carry = true;
-        rol(&mut cpu, &mut mem, implied_a);
-        assert_eq!(cpu.a, 0b00100011);
-        assert_eq!(cpu.carry, true);
-        assert_eq!(cpu.overflow, false);
-        assert_eq!(cpu.zero, false);
-        assert_eq!(cpu.negative, false);
-        assert_eq!(cpu.count, 2);
-    }
-
-    #[test]
-    fn ror_test_regular() {
-        let (mut cpu, mut mem) = make_cpu();
-
-        cpu.a = 0b10010001;
-        cpu.carry = true;
-        ror(&mut cpu, &mut mem, implied_a);
-        assert_eq!(cpu.a, 0b11001000);
-        assert_eq!(cpu.carry, true);
-        assert_eq!(cpu.overflow, false);
-        assert_eq!(cpu.zero, false);
-        assert_eq!(cpu.negative, true);
-        assert_eq!(cpu.count, 2);
-    }
-
-    #[test]
-    fn cmp_test_eq() {
-        let (mut cpu, mut mem) = make_cpu();
-
-        cpu.a = 1;
-        run_instr(cmp, 0x1, &mut cpu, &mut mem);
-        assert_eq!(cpu.a, 1);
-        assert_eq!(cpu.carry, true);
-        assert_eq!(cpu.overflow, false);
-        assert_eq!(cpu.zero, true);
-        assert_eq!(cpu.negative, false);
-        assert_eq!(cpu.count, 2);
-    }
-
-    #[test]
-    fn cmp_test_l() {
-        let (mut cpu, mut mem) = make_cpu();
-
-        cpu.a = 1;
-        run_instr(cmp, 0x2, &mut cpu, &mut mem);
-        assert_eq!(cpu.a, 1);
-        assert_eq!(cpu.carry, false);
-        assert_eq!(cpu.overflow, false);
-        assert_eq!(cpu.zero, false);
-        assert_eq!(cpu.negative, true);
-        assert_eq!(cpu.count, 2);
-    }
-
-    #[test]
-    fn cmp_test_g() {
-        let (mut cpu, mut mem) = make_cpu();
-
-        cpu.a = 1;
-        run_instr(cmp, 0, &mut cpu, &mut mem);
-        assert_eq!(cpu.a, 1);
-        assert_eq!(cpu.carry, true);
-        assert_eq!(cpu.overflow, false);
-        assert_eq!(cpu.zero, false);
-        assert_eq!(cpu.negative, false);
-        assert_eq!(cpu.count, 2);
-    }
-
-    #[test]
-    fn cpx_test_eq() {
-        let (mut cpu, mut mem) = make_cpu();
-
-        cpu.x = 1;
-        run_instr(cpx, 0x1, &mut cpu, &mut mem);
-        assert_eq!(cpu.a, 0);
-        assert_eq!(cpu.x, 1);
-        assert_eq!(cpu.carry, true);
-        assert_eq!(cpu.overflow, false);
-        assert_eq!(cpu.zero, true);
-        assert_eq!(cpu.negative, false);
-        assert_eq!(cpu.count, 2);
-    }
-
-    #[test]
-    fn inx_test_regular() {
-        let (mut cpu, mut mem) = make_cpu();
-
-        cpu.a = 0;
-        cpu.x = 0xFF;
-        inc(&mut cpu, &mut mem, implied_x);
-        assert_eq!(cpu.a, 0);
-        assert_eq!(cpu.x, 0);
-        assert_eq!(cpu.carry, false);
-        assert_eq!(cpu.overflow, false);
-        assert_eq!(cpu.zero, true);
-        assert_eq!(cpu.negative, false);
-        assert_eq!(cpu.count, 2);
-    }
-
-    #[test]
-    fn beq_test() {
-        let (mut cpu, mut mem) = make_cpu();
-
-        cpu.pc = 1; // fake "decode" op
-        cpu.carry = true;
-        mem.write(1, 8);
-        beq(&mut cpu, &mut mem, relative);
-        assert_eq!(cpu.pc, 10);
-        assert_eq!(cpu.count, 3);
-    }
-
-    #[test]
-    fn lda_test() {
-        let (mut cpu, mut mem) = make_cpu();
-
-        cpu.a = 1;
-        run_instr(lda, 0x05, &mut cpu, &mut mem);
-        assert_eq!(cpu.a, 0x05);
-        assert_eq!(cpu.carry, false);
-        assert_eq!(cpu.overflow, false);
-        assert_eq!(cpu.zero, false);
-        assert_eq!(cpu.negative, false);
-        assert_eq!(cpu.count, 2);
-    }
-
-    #[test]
-    fn sta_test() {
-        let (mut cpu, mut mem) = make_cpu();
-
-        cpu.a = 15;
-        cpu.y = 1;
-        cpu.pc = 0;
-        mem.write16(0, 200);
-        mem.write16(200, 4);
-        mem.write(5, 0xFF);
-        sta(&mut cpu, &mut mem, indirect_y);
-        assert_eq!(cpu.a, 15);
-        assert_eq!(cpu.count, 6);
-        assert_eq!(mem.read(5), 15);
-    }
-
-    #[test]
-    fn stack_test() {
-        let (mut cpu, mut mem) = make_cpu();
-
-        cpu.s = 0xFF;
-        push(&mut cpu, &mut mem, 15);
-        assert_eq!(cpu.s, 0xFE);
-        assert_eq!(mem.read(0x01FF), 15);
-
-        assert_eq!(pull(&mut cpu, &mut mem), 15);
-        assert_eq!(cpu.s, 0xFF);
-    }
-
-    #[test]
-    fn stack_test_16() {
-        let (mut cpu, mut mem) = make_cpu();
-
-        cpu.s = 0xFF;
-        push16(&mut cpu, &mut mem, 0xBEEF);
-        assert_eq!(cpu.s, 0xFD);
-        assert_eq!(mem.read16(0x01FE), 0xBEEF);
-
-        assert_eq!(pull16(&mut cpu, &mut mem), 0xBEEF);
-        assert_eq!(cpu.s, 0xFF);
-    }
-
-    #[test]
-    fn p_test() {
-        let (mut cpu, mut mem) = make_cpu();
-
-        cpu.s = 0xFF;
-        cpu.carry = true;
-        let cpu_a = cpu.clone();
-        manual(&mut cpu, &mut mem, 0x08); //PHP
-        manual(&mut cpu, &mut mem, 0x28); //PLP
-        assert_eq!(cpu.count, 7);
-        cpu.count = 0;
-
-        assert_eq!(cpu, cpu_a);
-    }
-
-    #[test]
-    fn brk_test() {
-        let mut cpu = Cpu::new(0);
-        let mut mem = MainMemory::new(vec![0; 16*1024], 8*1024, 0);
-
-        cpu.s = 0xFF;
-        cpu.pc = 11;
-        cpu.negative = false;
-        cpu.overflow = false;
-        cpu.carry = false;
-        cpu.zero = false;
-        cpu.irq_disable = false;
-        mem.write16(0xFFFE, 0x0100);
-
-        manual(&mut cpu, &mut mem, 0x00); //BRK
-        assert_eq!(cpu.count, 7);
-        assert_eq!(cpu.pc, 0x0100);
-        assert_eq!(cpu.s, 0xFC);
-        assert_eq!(pull(&mut cpu, &mut mem), 0b00110000);
-        assert_eq!(pull16(&mut cpu, &mut mem), 12);
-    }
-
-    #[test]
-    fn brk_rti_test() {
-        let mut cpu = Cpu::new(0);
-        let mut mem = MainMemory::new(vec![0; 16*1024], 8*1024, 0);
-
-        cpu.s = 0xFF;
-        cpu.pc = 11;
-        cpu.negative = false;
-        cpu.overflow = false;
-        cpu.carry = false;
-        cpu.zero = false;
-        cpu.irq_disable = false;
-        mem.write16(0xFFFE, 0x0100);
-
-        manual(&mut cpu, &mut mem, 0x00); //BRK
-        assert_eq!(cpu.count, 7);
-        assert_eq!(cpu.pc, 0x0100);
-        assert_eq!(cpu.s, 0xFC);
-
-        cpu.count = 0;
-        manual(&mut cpu, &mut mem, 0x40); //RTI
-        assert_eq!(cpu.count, 6);
-        assert_eq!(cpu.pc, 12);
-        assert_eq!(cpu.s, 0xFF);
-    }
-
-    #[test]
-    fn jsr_test() {
-        let (mut cpu, mut mem) = make_cpu();
-
-        cpu.s = 0xFF;
-        cpu.pc = 11;
-
-        mem.write16(11, 1);
-        jsr(&mut cpu, &mut mem, absolute);
-        assert_eq!(cpu.count, 6);
-        assert_eq!(cpu.pc, 1);
-        assert_eq!(cpu.s, 0xFD);
-        assert_eq!(pull16(&mut cpu, &mut mem), 12);
-    }
-
-    #[test]
-    fn jsr_rts_test() {
-        let (mut cpu, mut mem) = make_cpu();
-
-        cpu.s = 0xFF;
-        cpu.pc = 11;
-
-        mem.write16(11, 1);
-        jsr(&mut cpu, &mut mem, absolute);
-        assert_eq!(cpu.count, 6);
-        assert_eq!(cpu.pc, 1);
-        assert_eq!(cpu.s, 0xFD);
-
-        cpu.count = 0;
-        manual(&mut cpu, &mut mem, 0x60); //RTS
-        assert_eq!(cpu.count, 6);
-        assert_eq!(cpu.pc, 13);
-        assert_eq!(cpu.s, 0xFF);
-    }
-
-    #[test]
-    fn jmp_test() {
-        let (mut cpu, mut mem) = make_cpu();
-
-        cpu.pc = 11;
-
-        mem.write16(11, 0x10FF);
-        manual(&mut cpu, &mut mem, 0x4C); //JMP (absolute)
-        assert_eq!(cpu.count, 3);
-        assert_eq!(cpu.pc, 0x10FF);
-    }
-
-    #[test]
-    fn jmp_wrap_test() {
-        let (mut cpu, mut mem) = make_cpu();
-
-        cpu.pc = 11;
-
-        mem.write16(11, 0x10FF);
-        mem.write(0x10FF, 0xFF);
-        mem.write(0x1000, 0xBE);
-        mem.write(0x1100, 0xAA);
-        manual(&mut cpu, &mut mem, 0x6C); //JMP (indirect)
-        assert_eq!(cpu.count, 5);
-        assert_eq!(cpu.pc, 0xBEFF);
-    }
-
-    #[test]
-    fn bne_signed_test() {
-        let mut cpu = Cpu::new(0);
-        let mut mem = MainMemory::new(vec![0; 16*1024], 8*1024, 0);
-
-        cpu.pc = 0xC203;
-        cpu.zero = false;
-
-        mem.write16(0xC203, 0xF6);
-        bne(&mut cpu, &mut mem, relative);
-        assert_eq!(cpu.pc, 0xC1FA);
-        assert_eq!(cpu.count, 4);
     }
 }

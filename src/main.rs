@@ -14,9 +14,9 @@ mod cpu;
 mod ines;
 mod controller;
 mod nes;
-mod mem;
+mod memory;
 mod ppu;
-mod main_memory;
+mod mapper_0;
 
 use ines::*;
 use nes::*;
@@ -143,8 +143,8 @@ fn main() {
         input_log.remove(0);
         Box::new(Movie { input: Box::new(input_log) })
     };
-//    match load_file("tests/smb.nes") {
-    match load_file("tests/smb3.nes") {
+    match load_file("tests/smb.nes") {
+//    match load_file("tests/smb3.nes") {
         Ok(rom) => emulate(rom, input.as_mut()),
         Err(e) => panic!("Error: {:?}", e)
     }
