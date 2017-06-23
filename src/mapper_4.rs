@@ -1,14 +1,14 @@
 use memory::*;
 
-pub struct Mapper0 {
+pub struct Mapper4 {
     prg: Vec<u8>,
     prg_ram: Vec<u8>,
     chr: Vec<u8>,
 }
 
-impl Mapper0 {
-    pub fn new(prg: Vec<u8>, prg_ram_size: usize, chr: Vec<u8>) -> Mapper0 {
-        Mapper0 {
+impl Mapper4 {
+    pub fn new(prg: Vec<u8>, prg_ram_size: usize, chr: Vec<u8>) -> Mapper4 {
+        Mapper4 {
             prg: prg,
             prg_ram: vec![0; prg_ram_size],
             chr: chr,
@@ -16,11 +16,8 @@ impl Mapper0 {
     }
 }
 
-impl Mapper for Mapper0 {
+impl Mapper for Mapper4 {
     fn read(&mut self, addr: u16) -> u8 {
-        assert!(self.prg_ram.len() == 8*1024, "PRG ram must be 8kB");
-        assert!(self.prg.len() == 16*1024 || self.prg.len() == 32*1024, "PRG ram must be 16 or 32kb");
-
         match addr {
             0x6000 ... 0x7FFF => self.prg_ram[addr as usize - 0x6000],
             0x8000 ... 0xBFFF => self.prg[addr as usize - 0x8000],
@@ -32,7 +29,7 @@ impl Mapper for Mapper0 {
                 }
             },
             _ => {
-                panic!("Reference to invalid mapper 0 address {:X}", addr);
+                panic!("Reference to invalid mapper 4 address {:X}", addr);
             }
         }
     }
@@ -49,7 +46,7 @@ impl Mapper for Mapper0 {
                 }
             },
             _ => {
-                panic!("Reference to invalid mapper 0 address {:X}", addr);
+                panic!("Reference to invalid mapper 4 address {:X}", addr);
             }
         }
     }
@@ -58,7 +55,7 @@ impl Mapper for Mapper0 {
         match addr {
             0x0000...0x1FFF => self.chr[addr as usize],
             _ => {
-                panic!("Reference to invalid mapper 0 ppu address {:X}", addr);
+                panic!("Reference to invalid mapper 4 ppu address {:X}", addr);
             }
         }
     }
@@ -67,7 +64,7 @@ impl Mapper for Mapper0 {
         match addr {
             0x0000...0x1FFF => self.chr[addr as usize] = val,
             _ => {
-                panic!("Reference to invalid mapper 0 ppu address {:X}", addr);
+                panic!("Reference to invalid mapper 4 ppu address {:X}", addr);
             }
         }
     }

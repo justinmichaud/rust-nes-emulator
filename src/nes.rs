@@ -5,6 +5,7 @@ use ppu::*;
 use std::io;
 use piston_window::*;
 use mapper_0::*;
+use mapper_4::*;
 
 pub struct Nes {
     pub cpu: Cpu,
@@ -42,10 +43,11 @@ impl Nes {
         }
 
         let mut mem = Memory::new();
-        let mut mapper = Box::new(match mapper {
-            0 => Mapper0::new(prg, prg_ram_size, chr),
+        let mut mapper = match mapper {
+            0 => Box::new(Mapper0::new(prg, prg_ram_size, chr)) as Box<Mapper>,
+            4 => Box::new(Mapper4::new(prg, prg_ram_size, chr)) as Box<Mapper>,
             _ => panic!()
-        }) as Box<Mapper>;
+        };
 
         Nes {
             cpu: Cpu::new(mem.read16(&mut mapper, 0xFFFC)),
