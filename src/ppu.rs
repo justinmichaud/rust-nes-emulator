@@ -537,7 +537,7 @@ impl Ppu {
                         let real_y = if !fv {
                             y as u32 + (8 * i as u32 + py as u32)
                         } else {
-                            y as u32 + 15 - (8 * i as u32 + py as u32)
+                            y as u32 + (8 * (height/8) as u32 - 1) - (8 * i as u32 + py as u32)
                         };
 
                         if real_x >= self.output_canvas.width()
