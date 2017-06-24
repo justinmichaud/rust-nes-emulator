@@ -91,7 +91,8 @@ pub fn tick(nes: &mut Nes) {
     }
 
     // Player death
-    if nes.chipset.read(game_engine_subroutine) == 0x0B {
+    if nes.chipset.read(game_engine_subroutine) == 0x0B // Death by enemy?
+        || nes.chipset.read(game_engine_subroutine) == 0x06 { // Death by falling?
         // TODO rewind time
         // For now, we just advance through the pre-level
         if nes.special {
