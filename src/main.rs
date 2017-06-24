@@ -129,6 +129,8 @@ fn emulate((flags, prg, chr) : (Flags, Vec<u8>, Vec<u8>), controller_method: &mu
                 clear([0.0; 4], g);
                 nes.draw(c, g);
             });
+
+            //nes.chipset.ppu.output_canvas.save(format!("{}.png", frames));
         }
 
         if !USE_MOVIE {
