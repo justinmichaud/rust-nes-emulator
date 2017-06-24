@@ -114,6 +114,9 @@ pub struct Ppu {
     ppu_mss: bool,
     generate_nmi: bool,
 
+    ppu_chr_rom_delay_buffer: u8,
+    enable_ppu_chr_delay: bool,
+
     greyscale: bool,
     mask_left_background: bool, // 1: Show background in leftmost 8 pixels of screen, 0: Hide
     mask_left_sprites: bool,
@@ -165,6 +168,9 @@ impl Ppu {
             sprite_size: 0,
             ppu_mss: false,
             generate_nmi: false,
+
+            ppu_chr_rom_delay_buffer: 0,
+            enable_ppu_chr_delay: false,
 
             greyscale: false,
             mask_left_background: false,
@@ -227,7 +233,11 @@ impl Ppu {
             0x2007 => {
                 let addr = ((self.ppuaddr_lo as u16)&0x00FF)
                     + (((self.ppuaddr_hi as u16)&0xFF)<<8);
+
+                self.enable_ppu_chr_delay = true;
                 let val = self.read(mapper, addr);
+                self.enable_ppu_chr_delay = false;
+
                 self.increment_ppuaddr();
                 val
             },
@@ -638,7 +648,16 @@ fn make_texture(width: u32, height: u32, window: &mut PistonWindow)
 impl Mem for Ppu {
     fn read(&mut self, mapper: &mut Box<Mapper>, addr: u16) -> u8 {
         match addr as usize {
-            0x0000...0x1FFF => mapper.read_ppu(addr),
+            0x0000...0x1FFF => {
+                if self.enable_ppu_chr_delay {
+                    let val = self.ppu_chr_rom_delay_buffer;
+                    self.ppu_chr_rom_delay_buffer = mapper.read_ppu(addr);
+                    val
+                }
+                else {
+                    mapper.read_ppu(addr)
+                }
+            },
             0x2000...0x23FF => self.vram[addr as usize - 0x2000],
             0x2400...0x27FF => {
                 if self.horiz_mapping {
