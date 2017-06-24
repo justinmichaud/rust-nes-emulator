@@ -8,13 +8,14 @@ use image;
 use std::cmp;
 use mapper_0::*;
 use mapper_4::*;
+use smb_hack::SmbHack;
 use smb_hack;
 
 pub struct Nes {
     pub cpu: Cpu,
     pub chipset: Chipset,
     pub special: bool,
-    pub smb_hack: bool,
+    pub smb_hack: SmbHack,
 
     output_texture: G2dTexture,
     output_canvas: image::ImageBuffer<image::Rgba<u8>, Vec<u8>>,
@@ -62,7 +63,7 @@ impl Nes {
         let mut nes = Nes {
             cpu: Cpu::new(mem.read16(&mut mapper, 0xFFFC)),
             special: false,
-            smb_hack: true,
+            smb_hack: SmbHack::new(),
             output_texture: out_texture,
             chipset: Chipset {
                 mapper: mapper,
@@ -100,9 +101,7 @@ impl Nes {
             }
 
             self.cpu.tick(&mut self.chipset);
-            if self.smb_hack {
-                smb_hack::tick(self);
-            }
+            smb_hack::tick(self);
             self.chipset.ppu.tick(&mut self.cpu, &mut self.chipset.mapper);
 
             if self.cpu.debug {
