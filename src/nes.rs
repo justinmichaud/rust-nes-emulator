@@ -10,6 +10,7 @@ use mapper_4::*;
 pub struct Nes {
     pub cpu: Cpu,
     pub chipset: Chipset,
+    pub special: bool,
 }
 
 pub struct Chipset {
@@ -51,6 +52,7 @@ impl Nes {
 
         Nes {
             cpu: Cpu::new(mem.read16(&mut mapper, 0xFFFC)),
+            special: true,
             chipset: Chipset {
                 mapper: mapper,
                 mem: mem,
@@ -95,7 +97,7 @@ impl Nes {
     }
 
     pub fn prepare_draw(&mut self, window: &mut PistonWindow) {
-        self.chipset.ppu.prepare_draw(&mut self.chipset.mapper, window)
+        self.chipset.ppu.prepare_draw(&mut self.chipset.mapper, window, self.special)
     }
 
     pub fn draw(&mut self, c: Context, g: &mut G2d) {

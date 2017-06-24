@@ -36,6 +36,7 @@ impl ControllerMethod for User {
         if let Some(button) = e.press_args() {
             match button {
                 Button::Keyboard(Key::D) => nes.cpu.debug = true,
+                Button::Keyboard(Key::E) => nes.special = !nes.special,
                 Button::Keyboard(Key::Up) => nes.chipset.controller1.up = true,
                 Button::Keyboard(Key::Left) => nes.chipset.controller1.left = true,
                 Button::Keyboard(Key::Down) => nes.chipset.controller1.down = true,

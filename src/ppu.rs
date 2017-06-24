@@ -568,7 +568,7 @@ impl Ppu {
         }
     }
 
-    pub fn prepare_draw(&mut self, mapper: &mut Box<Mapper>, window: &mut PistonWindow) {
+    pub fn prepare_draw(&mut self, mapper: &mut Box<Mapper>, window: &mut PistonWindow, special: bool) {
         for x in 0..self.output_canvas.width() {
             for y in 0..self.output_canvas.height() {
                 self.sprite_output[x as usize][y as usize] = 0;
