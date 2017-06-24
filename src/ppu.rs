@@ -279,9 +279,12 @@ impl Ppu {
                 if self.ppuscroll_ppuaddr_pick {
                     self.ppuaddr_lo = val;
 
-                    // For NESDoug's SPACY, it uses a weird vertical blanking trick
-                    // I am not going to worry about it for now
-                    // https://forums.nesdev.com/viewtopic.php?f=2&t=15351
+                    // This is a hack so that I don't have to do full scanline emulation
+                    let nametable = (self.ppuaddr_hi&0b00001100)>>2;
+                    if nametable != self.nametable {
+                        self.nametable = nametable;
+                        self.push_state(cpu);
+                    }
                 }
                 else {
                     self.ppuaddr_hi = val;
