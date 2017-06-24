@@ -598,7 +598,7 @@ impl Ppu {
                 let mask = if self.pixel_greyscale[x as usize][y as usize] { 0x30 } else { 0xFF };
 
                 let p_idx = if sprite > 0
-                        && (self.sprite_priority[x as usize][y as usize] || bg == 0) {
+                        && (self.sprite_priority[x as usize][y as usize] || bg == 0x3F00) {
                     sprite
                 } else {
                     bg
