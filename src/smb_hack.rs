@@ -1,8 +1,7 @@
 use nes::*;
 
 pub struct SmbHack {
-    world: u8,
-    level: u8,
+    force_level: bool,
     prelevel_skip: bool,
     skip: bool,
 }
@@ -10,8 +9,7 @@ pub struct SmbHack {
 impl SmbHack {
     pub fn new() -> SmbHack {
         SmbHack {
-            world: 0,
-            level: 0,
+            force_level: false,
             prelevel_skip: false,
             skip: false,
         }
@@ -56,17 +54,14 @@ fn skip_death(nes: &mut Nes) {
     nes.smb_hack.skip = false;
 }
 
-fn choose_level(nes: &mut Nes) {
-    nes.smb_hack.level += 1;
-    if nes.smb_hack.level >= 4 {
-        nes.smb_hack.world += 1;
-        nes.smb_hack.level = 0;
-    }
-}
-
 fn set_level(nes: &mut Nes) {
-    nes.chipset.write(0x0760, nes.smb_hack.level); // Level
-    nes.chipset.write(0x075F, nes.smb_hack.world); // World
+    if !nes.smb_hack.force_level {
+        return;
+    }
+
+    nes.chipset.write(0x0760, 0); // Level area
+    nes.chipset.write(0x075c, 0); // Dash number
+    nes.chipset.write(0x075F, 0); // World
 }
 
 pub fn tick(nes: &mut Nes) {
@@ -88,8 +83,6 @@ pub fn tick(nes: &mut Nes) {
 
     // End of level
     if nes.chipset.read(game_engine_subroutine) == 0x05 {
-        choose_level(nes);
-        set_level(nes);
         nes.smb_hack.prelevel_skip = true;
     }
 
