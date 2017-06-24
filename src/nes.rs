@@ -1,3 +1,4 @@
+use settings::*;
 use cpu::*;
 use memory::*;
 use controller::*;
@@ -14,7 +15,6 @@ use smb_hack;
 pub struct Nes {
     pub cpu: Cpu,
     pub chipset: Chipset,
-    pub special: bool,
     pub smb_hack: SmbHack,
 
     output_texture: G2dTexture,
@@ -58,11 +58,10 @@ impl Nes {
             _ => panic!()
         };
 
-        let (out_canvas, out_texture) = make_texture(405, 720, window);
+        let (out_canvas, out_texture) = make_texture(window.size().width, window.size().height, window);
 
         let mut nes = Nes {
             cpu: Cpu::new(mem.read16(&mut mapper, 0xFFFC)),
-            special: false,
             smb_hack: SmbHack::new(),
             output_texture: out_texture,
             chipset: Chipset {
@@ -79,7 +78,9 @@ impl Nes {
             output_canvas: out_canvas,
         };
 
-        smb_hack::initial_state(&mut nes);
+        if USE_HACKS {
+            smb_hack::initial_state(&mut nes);
+        }
 
         nes
     }
@@ -101,7 +102,9 @@ impl Nes {
             }
 
             self.cpu.tick(&mut self.chipset);
-            smb_hack::tick(self);
+            if USE_HACKS {
+                smb_hack::tick(self);
+            }
             self.chipset.ppu.tick(&mut self.cpu, &mut self.chipset.mapper);
 
             if self.cpu.debug {
@@ -117,7 +120,7 @@ impl Nes {
     pub fn prepare_draw(&mut self, window: &mut PistonWindow) {
         self.chipset.ppu.prepare_draw(&mut self.chipset.mapper, window);
 
-        if !self.special {
+        if !SPECIAL {
             return;
         }
 
@@ -153,7 +156,7 @@ impl Nes {
 
         let x_off = x as f64 - hw;
         let y_off = y as f64 - hh;
-        let r = 10000f64;
+        let r = 12000f64;
         let z = r - (r.powi(2) - x_off.powi(2)).sqrt() + 1.;
 
         let mapped_x = (x_off/z)*3. + (self.output_canvas.width() as f64/2.);
@@ -163,8 +166,7 @@ impl Nes {
     }
 
     pub fn draw(&mut self, c: Context, g: &mut G2d) {
-        if self.special {
-            let c = c.trans(32.*3.*8./2. - 405./2., 0.);
+        if SPECIAL {
             image(&self.output_texture, c.transform, g);
         } else {
             self.chipset.ppu.draw(c, g)

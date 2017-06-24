@@ -17,14 +17,14 @@ mod nes;
 mod memory;
 mod ppu;
 mod smb_hack;
+mod settings;
 
 mod mapper_0;
 mod mapper_4;
 
 use ines::*;
 use nes::*;
-
-const USE_MOVIE: bool = false;
+use settings::*;
 
 trait ControllerMethod {
     fn do_input(&mut self, nes: &mut Nes, e: &Input);
@@ -38,19 +38,11 @@ impl ControllerMethod for User {
     fn do_input(&mut self, nes: &mut Nes, e: &Input) {
         if let Some(button) = e.press_args() {
             match button {
-                Button::Keyboard(Key::D) => nes.cpu.debug = true,
+                Button::Keyboard(Key::D) => nes.cpu.debug = DEBUG,
                 Button::Keyboard(Key::R) => {
-                    write_bytes_to_file(format!("{}.bin", self.dump_count), &nes.chipset.mem.ram);
-                    self.dump_count += 1;
-                },
-                Button::Keyboard(Key::E) => {
-                    nes.special = !nes.special;
-                    if !nes.special {
-                        nes.chipset.controller1.right = false;
-                        nes.chipset.controller1.b = false;
-                        nes.chipset.controller1.left = false;
-                        nes.chipset.controller1.up = false;
-                        nes.chipset.controller1.down = false;
+                    if DEBUG {
+                        write_bytes_to_file(format!("{}.bin", self.dump_count), &nes.chipset.mem.ram);
+                        self.dump_count += 1;
                     }
                 },
                 Button::Keyboard(Key::Up) => nes.chipset.controller1.up = true,
@@ -79,7 +71,7 @@ impl ControllerMethod for User {
             }
         }
 
-        if nes.special {
+        if SPECIAL {
             if nes.chipset.controller1.start {
                 nes.chipset.controller1.right = false;
                 nes.chipset.controller1.b = false;
@@ -124,8 +116,15 @@ impl ControllerMethod for Movie {
 
 fn emulate((flags, prg, chr) : (Flags, Vec<u8>, Vec<u8>), controller_method: &mut ControllerMethod) {
     println!("Loaded rom with {:?}", flags);
+
+    let size = if SPECIAL {
+        [405, 720]
+    } else {
+        [256*3, 240*3]
+    };
+
     let mut window: PistonWindow =
-        WindowSettings::new("Emulator", [256*3, 240*3])
+        WindowSettings::new("Emulator", size)
             .exit_on_esc(true).build().unwrap();
     window.set_max_fps(60);
     let mut nes = Nes::new(prg, chr, flags.mapper, flags.prg_ram_size, flags.horiz_mirroring, &mut window);

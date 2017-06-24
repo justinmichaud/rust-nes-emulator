@@ -1,4 +1,5 @@
 use nes::*;
+use settings::*;
 
 pub struct SmbHack {
     force_level: bool,
@@ -91,7 +92,7 @@ pub fn tick(nes: &mut Nes) {
         || nes.chipset.read(game_engine_subroutine) == 0x06 { // Death by falling?
         // TODO rewind time
         // For now, we just advance through the pre-level
-        if nes.special {
+        if SPECIAL {
             skip_death(nes);
             skip_prelevel(nes);
         }
