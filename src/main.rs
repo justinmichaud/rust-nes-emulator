@@ -62,6 +62,19 @@ impl ControllerMethod for User {
                 _ => ()
             }
         }
+
+        if nes.special {
+            if nes.chipset.controller1.start {
+                nes.chipset.controller1.right = false;
+                nes.chipset.controller1.b = false;
+            } else {
+                nes.chipset.controller1.right = true;
+                nes.chipset.controller1.b = true;
+            }
+            nes.chipset.controller1.left = false;
+            nes.chipset.controller1.up = false;
+            nes.chipset.controller1.down = false;
+        }
     }
 }
 
