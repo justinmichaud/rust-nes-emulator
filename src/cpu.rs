@@ -693,7 +693,7 @@ fn manual(cpu: &mut Cpu, mem: &mut Chipset, op: u8) {
         },
         0xF8 => cpu.decimal = true,
         0xD8 => cpu.decimal = false,
-        _ => panic!("Not implemented yet! Op: {:X} at {:X}", op, cpu.pc-1)
+        _ => panic!("Not implemented yet! Op: {:X} at {:X}", op, cpu.pc.wrapping_sub(1))
     }
 }
 
@@ -792,7 +792,7 @@ impl Cpu {
     pub fn tick(&mut self, mem: &mut Chipset) {
         //println!("{:X}", self.pc);
         let op = mem.read(self.pc);
-        self.pc.wrapping_add(1);
+        self.pc = self.pc.wrapping_add(1);
 
         if self.debug {
             print!("{:04X}: {:0X}", self.pc - 1, op);
