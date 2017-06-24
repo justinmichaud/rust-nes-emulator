@@ -112,28 +112,45 @@ impl Nes {
             return;
         }
 
+        for (x,y,p) in self.chipset.ppu.output_canvas.enumerate_pixels() {
+            let x = x as f64;
+            let y = y as f64;
+
+            let (mapped_left, _) = self.get_mapped(x-0.5, y);
+            let (mapped_right, _) = self.get_mapped(x+0.5, y);
+            let (_, mapped_top) = self.get_mapped(x, y+0.5);
+            let (_, mapped_bottom) = self.get_mapped(x, y-0.5);
+
+            for ix in mapped_left.round() as i32 ... mapped_right.round() as i32 {
+                for iy in mapped_bottom.round() as i32 ... mapped_top.round() as i32 {
+                    if ix < 0 || iy < 0 || ix >= self.output_canvas.width() as i32
+                        || iy >= self.output_canvas.height() as i32 {
+                        continue;
+                    }
+
+                    self.output_canvas.put_pixel(ix as u32, iy as u32, *p);
+                }
+            }
+        }
+
+        self.output_texture.update(&mut window.encoder, &self.output_canvas).unwrap();
+    }
+
+    fn get_mapped(&self, x: f64, y: f64) -> (f64, f64) {
         let w = self.chipset.ppu.output_canvas.width();
         let hw = w as f64 / 2.;
         let h = self.chipset.ppu.output_canvas.height();
         let hh = h as f64 / 2.;
 
-        for (x,y,p) in self.chipset.ppu.output_canvas.enumerate_pixels() {
-            let x_off = x as f64 - hw;
-            let y_off = y as f64 - hh;
-            let r = 50000f64;
-            let z = r - (r.powi(2) - x_off.powi(2)).sqrt() + 1.;
+        let x_off = x as f64 - hw;
+        let y_off = y as f64 - hh;
+        let r = 50000f64;
+        let z = r - (r.powi(2) - x_off.powi(2)).sqrt() + 1.;
 
-            let mapped_x = ((x_off/z + hw)*3.).round() as u32;
-            let mapped_y = ((y_off/z + hh)*3.).round() as u32;
+        let mapped_x = (x_off/z + hw)*3.;
+        let mapped_y = (y_off/z + hh)*3.;
 
-            let mapped_x = cmp::min(self.output_canvas.width()-1, cmp::max(0, mapped_x));
-            let mapped_y = cmp::min(self.output_canvas.height()-1, cmp::max(0, mapped_y));
-
-            let px = *self.chipset.ppu.output_canvas.get_pixel(x,y);
-            self.output_canvas.put_pixel(mapped_x, mapped_y, px);
-        }
-
-        self.output_texture.update(&mut window.encoder, &self.output_canvas).unwrap();
+        (mapped_x, mapped_y)
     }
 
     pub fn draw(&mut self, c: Context, g: &mut G2d) {
