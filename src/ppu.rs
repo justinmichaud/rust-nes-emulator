@@ -131,7 +131,7 @@ pub struct Ppu {
     vertical_blanking: bool,
 
     output_texture: G2dTexture,
-    output_canvas: image::ImageBuffer<image::Rgba<u8>, Vec<u8>>,
+    pub output_canvas: image::ImageBuffer<image::Rgba<u8>, Vec<u8>>,
     sprite_output: [[u16; 30*8]; 32*8],
     bg_output: [[u16; 30*8]; 32*8],
     sprite_priority: [[bool; 30*8]; 32*8],
@@ -568,7 +568,7 @@ impl Ppu {
         }
     }
 
-    pub fn prepare_draw(&mut self, mapper: &mut Box<Mapper>, window: &mut PistonWindow, special: bool) {
+    pub fn prepare_draw(&mut self, mapper: &mut Box<Mapper>, window: &mut PistonWindow) {
         for x in 0..self.output_canvas.width() {
             for y in 0..self.output_canvas.height() {
                 self.sprite_output[x as usize][y as usize] = 0;
@@ -628,7 +628,7 @@ impl Ppu {
     }
 }
 
-fn make_texture(width: u32, height: u32, window: &mut PistonWindow)
+pub fn make_texture(width: u32, height: u32, window: &mut PistonWindow)
     -> (image::ImageBuffer<image::Rgba<u8>, Vec<u8>>, G2dTexture) {
 
     let canvas = image::ImageBuffer::new(width, height);

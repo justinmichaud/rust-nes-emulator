@@ -4,6 +4,8 @@ use controller::*;
 use ppu::*;
 use std::io;
 use piston_window::*;
+use image;
+use std::cmp;
 use mapper_0::*;
 use mapper_4::*;
 
@@ -11,6 +13,9 @@ pub struct Nes {
     pub cpu: Cpu,
     pub chipset: Chipset,
     pub special: bool,
+
+    output_texture: G2dTexture,
+    output_canvas: image::ImageBuffer<image::Rgba<u8>, Vec<u8>>,
 }
 
 pub struct Chipset {
@@ -50,9 +55,12 @@ impl Nes {
             _ => panic!()
         };
 
+        let (out_canvas, out_texture) = make_texture(window.size().width, window.size().height, window);
+
         Nes {
             cpu: Cpu::new(mem.read16(&mut mapper, 0xFFFC)),
             special: true,
+            output_texture: out_texture,
             chipset: Chipset {
                 mapper: mapper,
                 mem: mem,
@@ -64,6 +72,7 @@ impl Nes {
 
                 ppu_writes_requested: vec![],
             },
+            output_canvas: out_canvas,
         }
     }
 
@@ -97,11 +106,42 @@ impl Nes {
     }
 
     pub fn prepare_draw(&mut self, window: &mut PistonWindow) {
-        self.chipset.ppu.prepare_draw(&mut self.chipset.mapper, window, self.special)
+        self.chipset.ppu.prepare_draw(&mut self.chipset.mapper, window);
+
+        if !self.special {
+            return;
+        }
+
+        let w = self.chipset.ppu.output_canvas.width();
+        let hw = w as f64 / 2.;
+        let h = self.chipset.ppu.output_canvas.height();
+        let hh = h as f64 / 2.;
+
+        for (x,y,p) in self.chipset.ppu.output_canvas.enumerate_pixels() {
+            let x_off = x as f64 - hw;
+            let y_off = y as f64 - hh;
+            let r = 50000f64;
+            let z = r - (r.powi(2) - x_off.powi(2)).sqrt() + 1.;
+
+            let mapped_x = ((x_off/z + hw)*3.).round() as u32;
+            let mapped_y = ((y_off/z + hh)*3.).round() as u32;
+
+            let mapped_x = cmp::min(self.output_canvas.width()-1, cmp::max(0, mapped_x));
+            let mapped_y = cmp::min(self.output_canvas.height()-1, cmp::max(0, mapped_y));
+
+            let px = *self.chipset.ppu.output_canvas.get_pixel(x,y);
+            self.output_canvas.put_pixel(mapped_x, mapped_y, px);
+        }
+
+        self.output_texture.update(&mut window.encoder, &self.output_canvas).unwrap();
     }
 
     pub fn draw(&mut self, c: Context, g: &mut G2d) {
-        self.chipset.ppu.draw(c, g)
+        if self.special {
+            image(&self.output_texture, c.transform, g);
+        } else {
+            self.chipset.ppu.draw(c, g)
+        }
     }
 }
 
