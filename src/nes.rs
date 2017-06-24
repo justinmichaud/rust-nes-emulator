@@ -8,11 +8,13 @@ use image;
 use std::cmp;
 use mapper_0::*;
 use mapper_4::*;
+use smb_hack;
 
 pub struct Nes {
     pub cpu: Cpu,
     pub chipset: Chipset,
     pub special: bool,
+    pub smb_hack: bool,
 
     output_texture: G2dTexture,
     output_canvas: image::ImageBuffer<image::Rgba<u8>, Vec<u8>>,
@@ -57,9 +59,10 @@ impl Nes {
 
         let (out_canvas, out_texture) = make_texture(405, 720, window);
 
-        Nes {
+        let mut nes = Nes {
             cpu: Cpu::new(mem.read16(&mut mapper, 0xFFFC)),
-            special: true,
+            special: false,
+            smb_hack: true,
             output_texture: out_texture,
             chipset: Chipset {
                 mapper: mapper,
@@ -73,7 +76,11 @@ impl Nes {
                 ppu_writes_requested: vec![],
             },
             output_canvas: out_canvas,
-        }
+        };
+
+        smb_hack::initial_state(&mut nes);
+
+        nes
     }
 
     pub fn tick(&mut self) {
@@ -93,7 +100,9 @@ impl Nes {
             }
 
             self.cpu.tick(&mut self.chipset);
-            self.check_states();
+            if self.smb_hack {
+                smb_hack::tick(self);
+            }
             self.chipset.ppu.tick(&mut self.cpu, &mut self.chipset.mapper);
 
             if self.cpu.debug {
@@ -104,16 +113,6 @@ impl Nes {
         }
 
         self.cpu.count -= frame_time;
-    }
-
-    fn check_states(&mut self) {
-        let game_over_mode = 3;
-        let oper_mode = 0x0770;
-        let game_engine_subroutine = 0x0E;
-
-//        if self.chipset.read(game_engine_subroutine) == 0x0B {
-//            self.chipset.write(oper_mode, 1);
-//        }
     }
 
     pub fn prepare_draw(&mut self, window: &mut PistonWindow) {

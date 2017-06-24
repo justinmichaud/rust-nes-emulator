@@ -16,6 +16,7 @@ mod controller;
 mod nes;
 mod memory;
 mod ppu;
+mod smb_hack;
 
 mod mapper_0;
 mod mapper_4;
