@@ -55,7 +55,7 @@ impl Nes {
             _ => panic!()
         };
 
-        let (out_canvas, out_texture) = make_texture(window.size().width, window.size().height, window);
+        let (out_canvas, out_texture) = make_texture(405, 720, window);
 
         Nes {
             cpu: Cpu::new(mem.read16(&mut mapper, 0xFFFC)),
@@ -144,17 +144,18 @@ impl Nes {
 
         let x_off = x as f64 - hw;
         let y_off = y as f64 - hh;
-        let r = 50000f64;
+        let r = 10000f64;
         let z = r - (r.powi(2) - x_off.powi(2)).sqrt() + 1.;
 
-        let mapped_x = (x_off/z + hw)*3.;
-        let mapped_y = (y_off/z + hh)*3.;
+        let mapped_x = (x_off/z)*3. + (self.output_canvas.width() as f64/2.);
+        let mapped_y = (y_off/z)*3. + (self.output_canvas.height() as f64/2.);
 
         (mapped_x, mapped_y)
     }
 
     pub fn draw(&mut self, c: Context, g: &mut G2d) {
         if self.special {
+            let c = c.trans(32.*3.*8./2. - 405./2., 0.);
             image(&self.output_texture, c.transform, g);
         } else {
             self.chipset.ppu.draw(c, g)
