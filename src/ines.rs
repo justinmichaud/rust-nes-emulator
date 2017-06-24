@@ -1,5 +1,6 @@
 use std::fs::File;
 use std::io::BufReader;
+use std::io::BufWriter;
 use std::io::prelude::*;
 use std::io::Result;
 use std::io::Error;
@@ -19,6 +20,12 @@ pub fn lines_from_file(filename: &str) -> Vec<String> {
     let file = File::open(filename).expect("no such file");
     let buf = BufReader::new(file);
     buf.lines().map(|l| l.expect("Could not parse line")).collect()
+}
+
+pub fn write_bytes_to_file(filename: String, vec: &[u8]) {
+    let file = File::create(filename).unwrap();
+    let mut bw = BufWriter::new(file);
+    bw.write_all(vec).unwrap();
 }
 
 pub fn load_file(file: &str) -> Result<(Flags, Vec<u8>, Vec<u8>)> {

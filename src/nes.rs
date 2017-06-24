@@ -93,6 +93,7 @@ impl Nes {
             }
 
             self.cpu.tick(&mut self.chipset);
+            self.check_states();
             self.chipset.ppu.tick(&mut self.cpu, &mut self.chipset.mapper);
 
             if self.cpu.debug {
@@ -103,6 +104,16 @@ impl Nes {
         }
 
         self.cpu.count -= frame_time;
+    }
+
+    fn check_states(&mut self) {
+        let game_over_mode = 3;
+        let oper_mode = 0x0770;
+        let game_engine_subroutine = 0x0E;
+
+//        if self.chipset.read(game_engine_subroutine) == 0x0B {
+//            self.chipset.write(oper_mode, 1);
+//        }
     }
 
     pub fn prepare_draw(&mut self, window: &mut PistonWindow) {
@@ -148,7 +159,7 @@ impl Nes {
         let z = r - (r.powi(2) - x_off.powi(2)).sqrt() + 1.;
 
         let mapped_x = (x_off/z)*3. + (self.output_canvas.width() as f64/2.);
-        let mapped_y = (y_off/z)*3. + (self.output_canvas.height() as f64/2.);
+        let mapped_y = (y_off)*3. + (self.output_canvas.height() as f64/2.);
 
         (mapped_x, mapped_y)
     }

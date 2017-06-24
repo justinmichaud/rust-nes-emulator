@@ -26,7 +26,7 @@ pub trait Mem {
 }
 
 pub struct Memory {
-    ram: [u8; 2 * 1024],
+    pub ram: [u8; 2 * 1024],
 }
 
 impl Memory {

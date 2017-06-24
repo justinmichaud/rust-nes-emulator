@@ -29,14 +29,29 @@ trait ControllerMethod {
     fn do_input(&mut self, nes: &mut Nes, e: &Input);
 }
 
-struct User;
+struct User {
+    dump_count: u8,
+}
 
 impl ControllerMethod for User {
     fn do_input(&mut self, nes: &mut Nes, e: &Input) {
         if let Some(button) = e.press_args() {
             match button {
                 Button::Keyboard(Key::D) => nes.cpu.debug = true,
-                Button::Keyboard(Key::E) => nes.special = !nes.special,
+                Button::Keyboard(Key::R) => {
+                    write_bytes_to_file(format!("{}.bin", self.dump_count), &nes.chipset.mem.ram);
+                    self.dump_count += 1;
+                },
+                Button::Keyboard(Key::E) => {
+                    nes.special = !nes.special;
+                    if !nes.special {
+                        nes.chipset.controller1.right = false;
+                        nes.chipset.controller1.b = false;
+                        nes.chipset.controller1.left = false;
+                        nes.chipset.controller1.up = false;
+                        nes.chipset.controller1.down = false;
+                    }
+                },
                 Button::Keyboard(Key::Up) => nes.chipset.controller1.up = true,
                 Button::Keyboard(Key::Left) => nes.chipset.controller1.left = true,
                 Button::Keyboard(Key::Down) => nes.chipset.controller1.down = true,
@@ -153,7 +168,7 @@ fn emulate((flags, prg, chr) : (Flags, Vec<u8>, Vec<u8>), controller_method: &mu
 }
 
 fn main() {
-    let mut input: Box<ControllerMethod> = if !USE_MOVIE { Box::new(User) } else {
+    let mut input: Box<ControllerMethod> = if !USE_MOVIE { Box::new(User { dump_count: 0 }) } else {
 //        let mut input_log = lines_from_file("tests/mars608,happylee-smb-warpless,walkathon.fm2");
         let mut input_log = lines_from_file("tests/happylee-supermariobros,warped.fm2");
         while !input_log.first().unwrap().starts_with('|') { input_log.remove(0); }
