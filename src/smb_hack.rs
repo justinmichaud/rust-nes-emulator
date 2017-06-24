@@ -21,17 +21,17 @@ impl SmbHack {
 pub fn initial_state(nes: &mut Nes) {
     // Big 'ol hack to skip the title screen
     nes.smb_hack.skip = true;
-
-    choose_level(nes);
     set_level(nes);
 
     for _ in 0..60 {
         nes.tick();
+        set_level(nes);
     }
 
     nes.chipset.controller1.start = true;
     for _ in 0..2 {
         nes.tick();
+        set_level(nes);
     }
     nes.chipset.controller1.start = false;
 
@@ -57,8 +57,11 @@ fn skip_death(nes: &mut Nes) {
 }
 
 fn choose_level(nes: &mut Nes) {
-    nes.smb_hack.level = 0;
-    nes.smb_hack.world = 0;
+    nes.smb_hack.level += 1;
+    if nes.smb_hack.level >= 4 {
+        nes.smb_hack.world += 1;
+        nes.smb_hack.level = 0;
+    }
 }
 
 fn set_level(nes: &mut Nes) {
