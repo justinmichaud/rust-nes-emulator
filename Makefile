@@ -1,7 +1,7 @@
 buildtype = release
 
 PROJECT = rust-nes-emulator
-TARGET = asmjs-unknown-emscripten
+TARGET = wasm32-unknown-emscripten
 
 DOCS_DIR = docs
 DOCS_PORT = 8080
@@ -50,7 +50,7 @@ $(CARGO_OUTDIR)/$(JS_FILE): build-deps FORCE
 	EMMAKEN_CFLAGS="$(EMCC_OPTION)" $(CARGO) build $(CARGO_OPTION)
 
 $(DOCS_DIR)/$(JS_FILE): $(CARGO_OUTDIR)/$(JS_FILE) FORCE
-	find $(CARGO_OUTDIR) \( -name '*.js' -or -name '*.js.mem' -or -name '*.data' \) -exec cp {} $(DOCS_DIR) \;
+	find $(CARGO_OUTDIR) \( -name '*.js' -or -name '*.js.mem' -or -name '*.data' -or -name '*.wasm' \) -exec cp {} $(DOCS_DIR) \;
 
 # https://github.com/kripken/emscripten/issues/4151#issuecomment-193909827
 build-deps:

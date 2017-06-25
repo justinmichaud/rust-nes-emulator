@@ -6,3 +6,4 @@ smb.nes
 smb3.nes
 *.data
 *.js
+*.wasm
