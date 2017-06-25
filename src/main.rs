@@ -58,6 +58,7 @@ impl ControllerMethod for User {
                 Button::Keyboard(Key::Down) => nes.chipset.controller1.down = true,
                 Button::Keyboard(Key::Right) => nes.chipset.controller1.right = true,
                 Button::Keyboard(Key::A) => nes.chipset.controller1.a = true,
+                Button::Mouse(MouseButton::Left) => nes.chipset.controller1.a = true,
                 Button::Keyboard(Key::S) => nes.chipset.controller1.b = true,
                 Button::Keyboard(Key::Return) => nes.chipset.controller1.start = true,
                 Button::Keyboard(Key::Space) => nes.chipset.controller1.select = true,
@@ -72,6 +73,7 @@ impl ControllerMethod for User {
                 Button::Keyboard(Key::Down) => nes.chipset.controller1.down = false,
                 Button::Keyboard(Key::Right) => nes.chipset.controller1.right = false,
                 Button::Keyboard(Key::A) => nes.chipset.controller1.a = false,
+                Button::Mouse(MouseButton::Left) => nes.chipset.controller1.a = false,
                 Button::Keyboard(Key::S) => nes.chipset.controller1.b = false,
                 Button::Keyboard(Key::Return) => nes.chipset.controller1.start = false,
                 Button::Keyboard(Key::Space) => nes.chipset.controller1.select = false,
@@ -218,7 +220,7 @@ fn main() {
         input_log.remove(0);
         Box::new(Movie { input: Box::new(input_log) })
     };
-    match load_file("tests/smb.nes") {
+    match load_file("assets/smb.nes") {
         Ok(rom) => emulate(rom, input),
         Err(e) => panic!("Error: {:?}", e)
     }

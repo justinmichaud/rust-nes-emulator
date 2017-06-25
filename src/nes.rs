@@ -4,13 +4,10 @@ use memory::*;
 use controller::*;
 use ppu::*;
 use std::io;
-use image;
 use mapper_0::*;
 use mapper_4::*;
 use smb_hack::SmbHack;
 use smb_hack;
-
-use image::GenericImage;
 
 pub struct Nes {
     pub cpu: Cpu,
