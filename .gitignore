@@ -4,4 +4,5 @@ target
 donkey_kong.nes
 smb.nes
 smb3.nes
-*.bin
+*.data
+*.js
