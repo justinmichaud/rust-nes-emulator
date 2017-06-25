@@ -4,11 +4,17 @@
 
 #![plugin(phf_macros)]
 extern crate phf;
-extern crate piston_window;
+extern crate sdl2_window;
+extern crate piston;
+extern crate opengl_graphics;
 extern crate image;
+extern crate graphics;
 
-use piston_window::*;
+use sdl2_window::*;
+use piston::input::*;
 use std::time::Instant;
+use piston::window::{OpenGLWindow, WindowSettings};
+use opengl_graphics::{GlGraphics, OpenGL, Texture, TextureSettings};
 
 mod cpu;
 mod ines;
@@ -18,6 +24,7 @@ mod memory;
 mod ppu;
 mod smb_hack;
 mod settings;
+mod event_loop;
 
 mod mapper_0;
 mod mapper_4;
@@ -25,6 +32,7 @@ mod mapper_4;
 use ines::*;
 use nes::*;
 use settings::*;
+use ppu::{make_canvas, NesImageBuffer};
 
 trait ControllerMethod {
     fn do_input(&mut self, nes: &mut Nes, e: &Input);
@@ -114,7 +122,18 @@ impl ControllerMethod for Movie {
     }
 }
 
-fn emulate((flags, prg, chr) : (Flags, Vec<u8>, Vec<u8>), controller_method: &mut ControllerMethod) {
+struct App {
+    nes: Nes,
+    frames: u64,
+    last_time: Instant,
+
+    gl_graphics: GlGraphics,
+    controller_method: Box<ControllerMethod>,
+    texture: Texture,
+    canvas: NesImageBuffer,
+}
+
+fn emulate((flags, prg, chr) : (Flags, Vec<u8>, Vec<u8>), controller_method: Box<ControllerMethod>) {
     println!("Loaded rom with {:?}", flags);
 
     let size = if SPECIAL {
@@ -123,52 +142,75 @@ fn emulate((flags, prg, chr) : (Flags, Vec<u8>, Vec<u8>), controller_method: &mu
         [256*3, 240*3]
     };
 
-    let mut window: PistonWindow =
+    let window: Sdl2Window =
         WindowSettings::new("Emulator", size)
+            .opengl(OpenGL::V2_1)
+            .srgb(false)
             .exit_on_esc(true).build().unwrap();
-    window.set_max_fps(60);
-    let mut nes = Nes::new(prg, chr, flags.mapper, flags.prg_ram_size, flags.horiz_mirroring, &mut window);
+    let gl_graphics = GlGraphics::new(OpenGL::V2_1);
 
-    let mut frames = 0;
-    let mut last_time = Instant::now();
+    let nes = Nes::new(prg, chr, flags.mapper, flags.prg_ram_size, flags.horiz_mirroring);
 
-    while let Some(e) = window.next() {
-        if let Some(_) = e.render_args() {
-            frames += 1;
+    let canvas = make_canvas(size[0], size[1]);
+    let tex = Texture::from_image(&canvas, &TextureSettings::new());
 
-            if frames > 60 {
-                let elapsed = last_time.elapsed();
-                let ms = (elapsed.as_secs() * 1_000) + (elapsed.subsec_nanos() / 1_000_000) as u64;
-                println!("MS per frame: {}", ms/frames);
-                frames = 0;
-                last_time = Instant::now();
-            }
+    let app = App {
+        nes: nes,
+        frames: 0,
+        last_time:Instant::now(),
+        controller_method: controller_method,
 
-            let speedup = if USE_MOVIE { 20 } else { 1 };
-            for _ in 0..speedup {
-                if USE_MOVIE {
-                    controller_method.do_input(&mut nes, &e);
-                }
-                nes.tick();
-            }
-            nes.prepare_draw(&mut window);
+        gl_graphics: gl_graphics,
+        texture: tex,
+        canvas: canvas,
+    };
 
-            window.draw_2d(&e, |c, g| {
-                clear([0.0; 4], g);
-                nes.draw(c, g);
-            });
+    event_loop::event_loop::run(window, handle_event, app);
+}
 
-            //nes.chipset.ppu.output_canvas.save(format!("{}.png", frames));
+fn handle_event(window: &mut Sdl2Window, e: Input, app: &mut App) {
+    if let Some(size) = e.resize_args() {
+        app.canvas = make_canvas(size[0] as u32, size[1] as u32);
+        app.texture = Texture::from_image(&app.canvas, &TextureSettings::new());
+    }
+
+    if let Some(args) = e.render_args() {
+        window.make_current();
+        app.frames += 1;
+
+        if app.frames > 60 {
+            let elapsed = app.last_time.elapsed();
+            let ms = (elapsed.as_secs() * 1_000) + (elapsed.subsec_nanos() / 1_000_000) as u64;
+            println!("MS per frame: {}", ms/app.frames);
+            app.frames = 0;
+            app.last_time = Instant::now();
         }
 
-        if !USE_MOVIE {
-            controller_method.do_input(&mut nes, &e);
+        let speedup = if USE_MOVIE { 20 } else { 1 };
+        for _ in 0..speedup {
+            if USE_MOVIE {
+                app.controller_method.as_mut().do_input(&mut app.nes, &e);
+            }
+            app.nes.tick();
         }
+        app.nes.prepare_draw(&mut app.canvas);
+
+        app.texture.update(&app.canvas);
+        let tex = &app.texture;
+
+        app.gl_graphics.draw(args.viewport(),
+                              |ctx, g2d| graphics::image(tex, ctx.transform, g2d));
+
+        //app.canvas.save(format!("{}.png", app.frames)).unwrap();
+    }
+
+    if !USE_MOVIE {
+        app.controller_method.as_mut().do_input(&mut app.nes, &e);
     }
 }
 
 fn main() {
-    let mut input: Box<ControllerMethod> = if !USE_MOVIE { Box::new(User { dump_count: 0 }) } else {
+    let input: Box<ControllerMethod> = if !USE_MOVIE { Box::new(User { dump_count: 0 }) } else {
 //        let mut input_log = lines_from_file("tests/mars608,happylee-smb-warpless,walkathon.fm2");
         let mut input_log = lines_from_file("tests/happylee-supermariobros,warped.fm2");
         while !input_log.first().unwrap().starts_with('|') { input_log.remove(0); }
@@ -177,80 +219,8 @@ fn main() {
         Box::new(Movie { input: Box::new(input_log) })
     };
     match load_file("tests/smb.nes") {
-        Ok(rom) => emulate(rom, input.as_mut()),
+        Ok(rom) => emulate(rom, input),
         Err(e) => panic!("Error: {:?}", e)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn instr_misc_test_rom(file: &str) {
-        let mut window: PistonWindow =
-            WindowSettings::new("Emulator Tests", [256*3, 240*3])
-                .exit_on_esc(true).build().unwrap();
-
-        let mut nes = match load_file(file) {
-            Ok((flags, prg, chr)) =>
-                Nes::new(prg, chr, flags.mapper, flags.prg_ram_size, flags.horiz_mirroring, &mut window),
-            Err(e) => panic!("Error: {:?}", e)
-        };
-
-        loop {
-            nes.tick();
-
-            let e = window.next().unwrap();
-            nes.prepare_draw(&mut window);
-
-            window.draw_2d(&e, |c, g| {
-                clear([0.0; 4], g);
-                nes.draw(c, g);
-            });
-
-            let status = nes.chipset.read(0x6000);
-            if status != 0x80 && nes.chipset.read(0x6001) == 0xDE && nes.chipset.read(0x6002) == 0xB0 {
-                if status == 0 {
-                    window.should_close();
-                    break;
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn instr_misc_test_rom_01() {
-        instr_misc_test_rom("tests/nes-test-roms/instr_misc/rom_singles/01-abs_x_wrap.nes")
-    }
-
-    #[test]
-    fn instr_misc_test_rom_02() {
-        instr_misc_test_rom("tests/nes-test-roms/instr_misc/rom_singles/02-branch_wrap.nes")
-    }
-
-    #[test]
-    fn ppu_test_01() {
-        instr_misc_test_rom("tests/nes-test-roms/ppu_sprite_hit/rom_singles/01-basics.nes")
-    }
-
-    #[test]
-    fn ppu_test_02() {
-        instr_misc_test_rom("tests/nes-test-roms/ppu_sprite_hit/rom_singles/02-alignment.nes")
-    }
-
-    #[test]
-    fn ppu_test_03() {
-        instr_misc_test_rom("tests/nes-test-roms/ppu_sprite_hit/rom_singles/03-corners.nes")
-    }
-
-    #[test]
-    fn ppu_test_09() {
-        instr_misc_test_rom("tests/nes-test-roms/ppu_sprite_hit/rom_singles/09-timing.nes")
-    }
-
-    #[test]
-    fn ppu_test_10() {
-        instr_misc_test_rom("tests/nes-test-roms/ppu_sprite_hit/rom_singles/10-timing_order.nes")
     }
 }
 

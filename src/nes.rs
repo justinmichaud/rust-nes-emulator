@@ -4,21 +4,18 @@ use memory::*;
 use controller::*;
 use ppu::*;
 use std::io;
-use piston_window::*;
 use image;
-use std::cmp;
 use mapper_0::*;
 use mapper_4::*;
 use smb_hack::SmbHack;
 use smb_hack;
 
+use image::GenericImage;
+
 pub struct Nes {
     pub cpu: Cpu,
     pub chipset: Chipset,
     pub smb_hack: SmbHack,
-
-    output_texture: G2dTexture,
-    output_canvas: image::ImageBuffer<image::Rgba<u8>, Vec<u8>>,
 }
 
 pub struct Chipset {
@@ -46,7 +43,7 @@ fn get_line() -> String {
 
 impl Nes {
     pub fn new(prg: Vec<u8>, mut chr: Vec<u8>, mapper: u8, prg_ram_size: usize,
-               horiz_mapping: bool, window: &mut PistonWindow) -> Nes {
+               horiz_mapping: bool) -> Nes {
         if chr.len() == 0 {
             chr = vec![0; 8*1024];
         }
@@ -58,16 +55,13 @@ impl Nes {
             _ => panic!()
         };
 
-        let (out_canvas, out_texture) = make_texture(window.size().width, window.size().height, window);
-
         let mut nes = Nes {
             cpu: Cpu::new(mem.read16(&mut mapper, 0xFFFC)),
             smb_hack: SmbHack::new(),
-            output_texture: out_texture,
             chipset: Chipset {
                 mapper: mapper,
                 mem: mem,
-                ppu: Ppu::new(horiz_mapping, window),
+                ppu: Ppu::new(horiz_mapping),
                 ppu_dma_requested: false,
                 ppu_dma_val: 0,
                 controller1: Controller::new(),
@@ -75,7 +69,6 @@ impl Nes {
 
                 ppu_writes_requested: vec![],
             },
-            output_canvas: out_canvas,
         };
 
         if USE_HACKS {
@@ -117,10 +110,18 @@ impl Nes {
         self.cpu.count -= frame_time;
     }
 
-    pub fn prepare_draw(&mut self, window: &mut PistonWindow) {
-        self.chipset.ppu.prepare_draw(&mut self.chipset.mapper, window);
+    pub fn prepare_draw(&mut self, canvas: &mut NesImageBuffer) {
+        self.chipset.ppu.prepare_draw(&mut self.chipset.mapper);
 
         if !SPECIAL {
+            let w = self.chipset.ppu.output_canvas.width();
+            let h = self.chipset.ppu.output_canvas.height();
+            let cw = canvas.width();
+            let ch = canvas.height();
+
+            for (x,y,p) in canvas.enumerate_pixels_mut() {
+                *p = *self.chipset.ppu.output_canvas.get_pixel(x*w/cw, y*h/ch);
+            }
             return;
         }
 
@@ -128,27 +129,25 @@ impl Nes {
             let x = x as f64;
             let y = y as f64;
 
-            let (mapped_left, _) = self.get_mapped(x-0.5, y);
-            let (mapped_right, _) = self.get_mapped(x+0.5, y);
-            let (_, mapped_top) = self.get_mapped(x, y+0.5);
-            let (_, mapped_bottom) = self.get_mapped(x, y-0.5);
+            let (mapped_left, _) = self.get_mapped(x-0.5, y, canvas.width(), canvas.height());
+            let (mapped_right, _) = self.get_mapped(x+0.5, y, canvas.width(), canvas.height());
+            let (_, mapped_top) = self.get_mapped(x, y+0.5, canvas.width(), canvas.height());
+            let (_, mapped_bottom) = self.get_mapped(x, y-0.5, canvas.width(), canvas.height());
 
             for ix in mapped_left.round() as i32 ... mapped_right.round() as i32 {
                 for iy in mapped_bottom.round() as i32 ... mapped_top.round() as i32 {
-                    if ix < 0 || iy < 0 || ix >= self.output_canvas.width() as i32
-                        || iy >= self.output_canvas.height() as i32 {
+                    if ix < 0 || iy < 0 || ix >= canvas.width() as i32
+                        || iy >= canvas.height() as i32 {
                         continue;
                     }
 
-                    self.output_canvas.put_pixel(ix as u32, iy as u32, *p);
+                    canvas.put_pixel(ix as u32, iy as u32, *p);
                 }
             }
         }
-
-        self.output_texture.update(&mut window.encoder, &self.output_canvas).unwrap();
     }
 
-    fn get_mapped(&self, x: f64, y: f64) -> (f64, f64) {
+    fn get_mapped(&self, x: f64, y: f64, out_width: u32, out_height: u32) -> (f64, f64) {
         let w = self.chipset.ppu.output_canvas.width();
         let hw = w as f64 / 2.;
         let h = self.chipset.ppu.output_canvas.height();
@@ -159,18 +158,10 @@ impl Nes {
         let r = 12000f64;
         let z = r - (r.powi(2) - x_off.powi(2)).sqrt() + 1.;
 
-        let mapped_x = (x_off/z)*3. + (self.output_canvas.width() as f64/2.);
-        let mapped_y = (y_off)*3. + (self.output_canvas.height() as f64/2.);
+        let mapped_x = (x_off/z)*3. + (out_width as f64/2.);
+        let mapped_y = (y_off)*3. + (out_height as f64/2.);
 
         (mapped_x, mapped_y)
-    }
-
-    pub fn draw(&mut self, c: Context, g: &mut G2d) {
-        if SPECIAL {
-            image(&self.output_texture, c.transform, g);
-        } else {
-            self.chipset.ppu.draw(c, g)
-        }
     }
 }
 

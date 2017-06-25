@@ -8,7 +8,11 @@ phf = "0.7.21"
 phf_macros = "0.7.21"
 piston = "0.32.0"
 piston2d-graphics = "0.21.1"
-pistoncore-glutin_window = "0.37.0"
 piston2d-opengl_graphics = "0.43.0"
-piston_window = "0.66.0"
 image = "0.13.0"
+
+[dependencies.pistoncore-sdl2_window]
+git = "https://github.com/PistonDevelopers/sdl2_window"
+
+[target.'cfg(target_os = "emscripten")'.dependencies]
+emscripten-sys = "0.3.0"

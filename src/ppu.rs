@@ -1,13 +1,12 @@
 use cpu::*;
 
 use std::cmp;
-use piston_window::*;
-use texture::Filter;
 use image;
 use memory::*;
 
-static VBL: u32 = 21;
+pub type NesImageBuffer = image::ImageBuffer<image::Rgba<u8>, Vec<u8>>;
 
+static VBL: u32 = 21;
 static PALETTE: [u8; 192] = [
     124,124,124,
     0,0,252,
@@ -130,8 +129,7 @@ pub struct Ppu {
     sprite_0_hit: bool,
     vertical_blanking: bool,
 
-    output_texture: G2dTexture,
-    pub output_canvas: image::ImageBuffer<image::Rgba<u8>, Vec<u8>>,
+    pub output_canvas: NesImageBuffer,
     sprite_output: [[u16; 30*8]; 32*8],
     bg_output: [[u16; 30*8]; 32*8],
     sprite_priority: [[bool; 30*8]; 32*8],
@@ -143,9 +141,7 @@ pub struct Ppu {
 }
 
 impl Ppu {
-    pub fn new(horiz_mapping: bool, window: &mut PistonWindow) -> Ppu {
-        let (out_canvas, out_texture) = make_texture(32 * 8, 30 * 8, window);
-
+    pub fn new(horiz_mapping: bool) -> Ppu {
         Ppu {
             vram: [0; 2 * 1024],
             horiz_mapping: horiz_mapping,
@@ -185,8 +181,7 @@ impl Ppu {
             sprite_0_hit: false,
             vertical_blanking: false,
 
-            output_texture: out_texture,
-            output_canvas: out_canvas,
+            output_canvas: make_canvas(32 * 8, 30 * 8),
             sprite_output: [[0; 30*8]; 32*8],
             bg_output: [[0; 30*8]; 32*8],
             sprite_priority: [[false; 30*8]; 32*8],
@@ -568,7 +563,7 @@ impl Ppu {
         }
     }
 
-    pub fn prepare_draw(&mut self, mapper: &mut Box<Mapper>, window: &mut PistonWindow) {
+    pub fn prepare_draw(&mut self, mapper: &mut Box<Mapper>) {
         for x in 0..self.output_canvas.width() {
             for y in 0..self.output_canvas.height() {
                 self.sprite_output[x as usize][y as usize] = 0;
@@ -610,13 +605,6 @@ impl Ppu {
                     PALETTE[hsv * 3 + 2], 0xFF]));
             }
         }
-
-        self.output_texture.update(&mut window.encoder, &self.output_canvas).unwrap();
-    }
-
-    pub fn draw(&mut self, c: Context, g: &mut G2d) {
-        let c = c.scale(3.,3.);
-        image(&self.output_texture, c.transform, g);
     }
 
     pub fn increment_ppuaddr(&mut self) {
@@ -628,21 +616,8 @@ impl Ppu {
     }
 }
 
-pub fn make_texture(width: u32, height: u32, window: &mut PistonWindow)
-    -> (image::ImageBuffer<image::Rgba<u8>, Vec<u8>>, G2dTexture) {
-
-    let canvas = image::ImageBuffer::new(width, height);
-    let mut texture_settings = TextureSettings::new();
-    texture_settings.set_min(Filter::Nearest);
-    texture_settings.set_mag(Filter::Nearest);
-    texture_settings.set_mipmap(Filter::Nearest);
-    let texture = Texture::from_image(
-        &mut window.factory,
-        &canvas,
-        &texture_settings
-    ).unwrap();
-
-    (canvas, texture)
+pub fn make_canvas(width: u32, height: u32) -> NesImageBuffer {
+    image::ImageBuffer::new(width, height)
 }
 
 impl Mem for Ppu {
