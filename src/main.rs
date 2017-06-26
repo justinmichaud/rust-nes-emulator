@@ -53,6 +53,11 @@ impl ControllerMethod for User {
                         self.dump_count += 1;
                     }
                 },
+                Button::Keyboard(Key::K) => {
+                    if SPECIAL && USE_HACKS {
+                        smb_hack::kill_yourself(nes);
+                    }
+                },
                 Button::Keyboard(Key::Up) => nes.chipset.controller1.up = true,
                 Button::Keyboard(Key::Left) => nes.chipset.controller1.left = true,
                 Button::Keyboard(Key::Down) => nes.chipset.controller1.down = true,

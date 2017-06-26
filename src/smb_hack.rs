@@ -1,6 +1,8 @@
 use nes::*;
 use settings::*;
 
+const GAME_ENGINE_SUBROUTINE: u16 = 0x0E;
+
 pub struct SmbHack {
     force_level: bool,
     prelevel_skip: bool,
@@ -65,11 +67,14 @@ fn set_level(nes: &mut Nes) {
     nes.chipset.write(0x075F, 0); // World
 }
 
+pub fn kill_yourself(nes: &mut Nes) {
+    nes.chipset.write(GAME_ENGINE_SUBROUTINE, 0x06);
+}
+
 pub fn tick(nes: &mut Nes) {
     if nes.smb_hack.skip {
         return;
     }
-    let game_engine_subroutine = 0x0E;
 
     set_level(nes);
     if nes.smb_hack.prelevel_skip {
@@ -83,13 +88,13 @@ pub fn tick(nes: &mut Nes) {
     nes.chipset.write(0x075A, 8);
 
     // End of level
-    if nes.chipset.read(game_engine_subroutine) == 0x05 {
+    if nes.chipset.read(GAME_ENGINE_SUBROUTINE) == 0x05 {
         nes.smb_hack.prelevel_skip = true;
     }
 
     // Player death
-    if nes.chipset.read(game_engine_subroutine) == 0x0B // Death by enemy?
-        || nes.chipset.read(game_engine_subroutine) == 0x06 { // Death by falling?
+    if nes.chipset.read(GAME_ENGINE_SUBROUTINE) == 0x0B // Death by enemy?
+        || nes.chipset.read(GAME_ENGINE_SUBROUTINE) == 0x06 { // Death by falling?
         // TODO rewind time
         // For now, we just advance through the pre-level
         if SPECIAL {
