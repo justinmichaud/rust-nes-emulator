@@ -7,3 +7,4 @@ smb3.nes
 *.data
 *.js
 *.wasm
+.DS_Store

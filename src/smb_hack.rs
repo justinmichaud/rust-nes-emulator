@@ -1,4 +1,5 @@
 use nes::*;
+use smb_level::*;
 use settings::*;
 
 const GAME_ENGINE_SUBROUTINE: u16 = 0x0E;
@@ -7,14 +8,16 @@ pub struct SmbHack {
     force_level: bool,
     prelevel_skip: bool,
     skip: bool,
+    level: SmbLevel,
 }
 
 impl SmbHack {
     pub fn new() -> SmbHack {
         SmbHack {
-            force_level: false,
+            force_level: true,
             prelevel_skip: false,
             skip: false,
+            level: SmbLevel::new()
         }
     }
 }
@@ -23,6 +26,7 @@ pub fn initial_state(nes: &mut Nes) {
     // Big 'ol hack to skip the title screen
     nes.smb_hack.skip = true;
     set_level(nes);
+    prepare_level(nes);
 
     for _ in 0..60 {
         nes.tick();
@@ -67,6 +71,15 @@ fn set_level(nes: &mut Nes) {
     nes.chipset.write(0x075F, 0); // World
 }
 
+fn prepare_level(nes: &mut Nes) {
+    if !nes.smb_hack.force_level {
+        return;
+    }
+
+    nes.smb_hack.level = SmbLevel::new();
+    nes.smb_hack.level.load(&mut nes.chipset);
+}
+
 pub fn kill_yourself(nes: &mut Nes) {
     nes.chipset.write(GAME_ENGINE_SUBROUTINE, 0x06);
 }
@@ -90,6 +103,7 @@ pub fn tick(nes: &mut Nes) {
     // End of level
     if nes.chipset.read(GAME_ENGINE_SUBROUTINE) == 0x05 {
         nes.smb_hack.prelevel_skip = true;
+        prepare_level(nes);
     }
 
     // Player death

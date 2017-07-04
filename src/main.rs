@@ -23,6 +23,7 @@ mod nes;
 mod memory;
 mod ppu;
 mod smb_hack;
+mod smb_level;
 mod settings;
 mod event_loop;
 
