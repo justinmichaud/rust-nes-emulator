@@ -78,12 +78,24 @@ impl SmbLevel {
             let x = (b&0b11110000)>>4;
             let y = b&0b00001111;
 
-            let b = chipset.read(i+1);
-            let p = (b&0b10000000)>0;
-            let n = b&0b01111111;
+            if y == 15 {
+                let b = chipset.read(i+1);
+                let b2 = chipset.read(i+2);
+                let y = (b&0b11110000)>>4;
+                let p = (b2&0b10000000)>0;
+                let n = (b2&0b01110000) + (b&0b00001111);
+                let v = b2&0b00001111;
 
-            i += 2;
-            println!("{}, {}, {}, {:X}", x,y,p,n);
+                i += 3;
+                println!("{}, {}, {}, {:X}-{:X}", x,y,p,v,n);
+            } else {
+                let b = chipset.read(i+1);
+                let p = (b&0b10000000)>0;
+                let n = b&0b01111111;
+
+                i += 2;
+                println!("{}, {}, {}, {:X}", x,y,p,n);
+            }
         }
     }
 
