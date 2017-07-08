@@ -86,4 +86,8 @@ impl SmbLevel {
             println!("{}, {}, {}, {:X}", x,y,p,n);
         }
     }
+
+    pub fn persist(&mut self, chipset: &mut Chipset) {
+        chipset.write(0x074e, 1); // Set area type
+    }
 }

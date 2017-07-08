@@ -69,6 +69,7 @@ fn set_level(nes: &mut Nes) {
     nes.chipset.write(0x0760, 0); // Level area
     nes.chipset.write(0x075c, 0); // Dash number
     nes.chipset.write(0x075F, 0); // World
+    nes.smb_hack.level.persist(&mut nes.chipset);
 }
 
 fn prepare_level(nes: &mut Nes) {
