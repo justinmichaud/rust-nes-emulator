@@ -2,8 +2,6 @@ use nes::*;
 use ines::lines_from_file;
 use std::collections::HashMap;
 
-const GROUND: u8 = 0x04;
-
 pub struct SmbLevel {
 
 }
@@ -13,17 +11,22 @@ impl SmbLevel {
         SmbLevel {}
     }
 
-    fn raw_level() -> (HashMap<usize, Vec<(u8, u8)>>, HashMap<usize, Vec<(u8, u8)>>) {
+    // The game only allows three blocks in the same y position, and uses complex grouping
+    // of spaces and block types to get around this. Instead, here we will record the position
+    // of objects, with the last line of the level representing the block type
+    // This is not optimal, but will hopefully be good enough
+    fn raw_level() -> (HashMap<usize, Vec<(u8, u8)>>, HashMap<usize, Vec<(u8, u8)>>, u8) {
+        let mut start_bt = 0;
         let mut level_objects = HashMap::new();
         let mut enemy_objects = HashMap::new();
         let level_in = lines_from_file("assets/0.level");
 
         for x in 0..level_in[0].len() {
-            for y in 0...level_in.len()-1 {
+            for y in 0...level_in.len()-2 {
                 let c = level_in.get(y).unwrap().chars().nth(x).unwrap();
 
                 let (number, map) = match c {
-                    '.' => (GROUND, &mut level_objects),
+                    '.' => (0x04, &mut level_objects),
                     'g' => (0x06, &mut enemy_objects),
                     _ => continue
                 };
@@ -31,13 +34,24 @@ impl SmbLevel {
                 let objs = map.entry(x).or_insert(vec![]);
                 objs.push((y as u8, number));
             }
+
+            // Block type
+            let c = level_in.last().unwrap().chars().nth(x).unwrap();
+            if c == ' ' { continue; }
+            let i = u8::from_str_radix(&c.to_string(), 16).unwrap();
+
+            if x > 1 {
+                let objs = level_objects.entry(x-1).or_insert(vec![]);
+                objs.insert(0, (14, i));
+            }
+            else {
+                start_bt = i;
+            }
         }
 
-        (level_objects, enemy_objects)
+        (level_objects, enemy_objects, start_bt)
     }
 
-    // We can only have 3 level objects on the same y coordinate, so we
-    // group the objects vertically and then horizontally if possible
     fn combine_objects(level: &mut HashMap<usize, Vec<(u8, u8)>>) {
         let mut xs: Vec<usize> = level.keys().map(|x| x.clone()).collect();
         xs.sort();
@@ -45,36 +59,8 @@ impl SmbLevel {
         for x in xs {
             let slice = level.get_mut(&x).unwrap();
             if slice.len() <= 3 { continue; }
-            let mut new_slice = vec![];
 
-            let &(mut last_start_y, mut last_start_num) = slice.get(0).unwrap();
-            let mut count = 1;
-
-            for i in 0..slice.len() {
-                let &(y, number) = slice.get(i).unwrap();
-
-                if last_start_num == number && y == last_start_y+count
-                        && count<=16 && i < slice.len()-1 {
-                    count += 1;
-                } else {
-                    if count >1 && last_start_num == GROUND {
-                        let number = 0x50 + count - 1;
-                        new_slice.push((last_start_y, number));
-                    } else {
-                        for i in 0..count {
-                            new_slice.push((last_start_y+i, last_start_num));
-                        }
-                    }
-                    last_start_y = y;
-                    last_start_num = number;
-                    count = 1;
-                }
-            }
-
-            *slice = new_slice;
-            if slice.len() <= 3 { continue; }
-
-            panic!("Could not make x={} fit within 3 object limit", x);
+            println!("Could not make x={} fit within 3 object limit", x);
         }
     }
 
@@ -105,14 +91,14 @@ impl SmbLevel {
     pub fn load(&mut self, chipset: &mut Chipset) {
         chipset.write(0x8000 - 16 + 0x1CCC, 0x25); // Set area
 
-        let (mut level_objects, enemy_objects) = SmbLevel::raw_level();
+        let (mut level_objects, enemy_objects, bt) = SmbLevel::raw_level();
 
         SmbLevel::combine_objects(&mut level_objects);
 
         let mut level_objects = SmbLevel::paginate(level_objects);
         let mut enemy_objects = SmbLevel::paginate(enemy_objects);
         level_objects.insert(0, 0x40);
-        level_objects.insert(1, 0x00);
+        level_objects.insert(1, 0x00 + bt);
         level_objects.push(0xFD);
         enemy_objects.push(0xFF);
 
@@ -145,31 +131,31 @@ impl SmbLevel {
             chipset.write(0x8000 - 16 + 0x1F11 + i as u16, enemy_objects[i]);
         }
 
-        let mut i = 0x8000 - 16 + 0x269E + 2;
-        while chipset.read(i) != 0xFD {
-            let b = chipset.read(i);
-            let x = (b&0b11110000)>>4;
-            let y = b&0b00001111;
-
-            if y == 15 {
-                let b = chipset.read(i+1);
-                let b2 = chipset.read(i+2);
-                let y = (b&0b11110000)>>4;
-                let p = (b2&0b10000000)>0;
-                let n = (b2&0b01110000) + (b&0b00001111);
-                let v = b2&0b00001111;
-
-                i += 3;
-                println!("{}, {}, {}, {:X}-{:X}", x,y,p,v,n);
-            } else {
-                let b = chipset.read(i+1);
-                let p = (b&0b10000000)>0;
-                let n = b&0b01111111;
-
-                i += 2;
-                println!("{}, {}, {}, {:X}", x,y,p,n);
-            }
-        }
+//        let mut i = 0x8000 - 16 + 0x269E + 2;
+//        while chipset.read(i) != 0xFD {
+//            let b = chipset.read(i);
+//            let x = (b&0b11110000)>>4;
+//            let y = b&0b00001111;
+//
+//            if y == 15 {
+//                let b = chipset.read(i+1);
+//                let b2 = chipset.read(i+2);
+//                let y = (b&0b11110000)>>4;
+//                let p = (b2&0b10000000)>0;
+//                let n = (b2&0b01110000) + (b&0b00001111);
+//                let v = b2&0b00001111;
+//
+//                i += 3;
+//                println!("{}, {}, {}, {:X}-{:X}", x,y,p,v,n);
+//            } else {
+//                let b = chipset.read(i+1);
+//                let p = (b&0b10000000)>0;
+//                let n = b&0b01111111;
+//
+//                i += 2;
+//                println!("{}, {}, {}, {:X}", x,y,p,n);
+//            }
+//        }
     }
 
     pub fn persist(&mut self, chipset: &mut Chipset) {

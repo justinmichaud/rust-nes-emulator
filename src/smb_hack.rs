@@ -104,7 +104,7 @@ pub fn tick(nes: &mut Nes) {
     // End of level
     if nes.chipset.read(GAME_ENGINE_SUBROUTINE) == 0x05 {
         nes.smb_hack.prelevel_skip = true;
-        prepare_level(nes);
+        //prepare_level(nes);
     }
 
     // Player death
