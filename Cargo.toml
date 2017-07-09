@@ -16,3 +16,11 @@ git = "https://github.com/PistonDevelopers/sdl2_window"
 
 [target.'cfg(target_os = "emscripten")'.dependencies]
 emscripten-sys = "0.3.0"
+
+[[bin]]
+name = "emulator"
+path = "src/main.rs"
+
+[[bin]]
+name = "level_out"
+path = "src/level_out.rs"
