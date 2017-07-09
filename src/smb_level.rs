@@ -27,8 +27,10 @@ impl SmbLevel {
                 let c = level_in.get(y).unwrap().chars().nth(x).unwrap();
 
                 let (number, map) = match c {
-                    '?' => (0x0, &mut level_objects),
+                    '?' => (0x01, &mut level_objects),
+                    '!' => (0x00, &mut level_objects),
                     'b' => (0x20, &mut level_objects),
+                    '0' => (0x60, &mut level_objects),
                     'g' => (0x06, &mut enemy_objects),
                     _ => continue
                 };

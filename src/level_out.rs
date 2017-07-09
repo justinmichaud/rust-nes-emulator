@@ -86,12 +86,24 @@ fn main() {
                 bt = n;
                 let c = format!("{:X}", bt).chars().next().unwrap();
                 put(&mut level, x, p_x, LEVEL_HEIGHT, c as u8);
-            } else if y < 12 && n >= 0x50 && n <= 0x5F {
-                for i in 0...(n-0x50) {
+            } else if y < 12 && n >= 0x20 && n <= 0x2F {
+                for i in 0...(n-0x20) {
                     put(&mut level, x + i, p_x, y, b'b');
                 }
+            } else if y < 12 && n >= 0x50 && n <= 0x5F {
+                for i in 0...(n-0x50) {
+                    put(&mut level, x, p_x, y+i, b'b');
+                }
+            } else if y < 12 && n >= 0x60 && n <= 0x6F {
+                for i in 0...(n-0x60) {
+                    put(&mut level, x, p_x, y+i, b'0');
+                }
             } else if y < 12 && n == 0 {
-                put(&mut level, x, p_x, y, b'b')
+                put(&mut level, x, p_x, y, b'!')
+            } else if y < 12 && n == 1 {
+                put(&mut level, x, p_x, y, b'?')
+            } else if y < 12 && n == 73 {
+                put(&mut level, x, p_x, y, b'p')
             } else {
                 println!("{}, {}, {}, {:X}", x, y, p, n);
                 put(&mut level, x, p_x, y, b' ');
