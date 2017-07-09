@@ -1,6 +1,12 @@
 use nes::*;
 use ines::lines_from_file;
 use std::collections::HashMap;
+use phf::Map;
+
+const GROUPABLE: Map<u8, (u8, u8)> = phf_map!{
+    0x20u8 => (0x20, 0x50),
+    0x30u8 => (0x30, 0x60),
+};
 
 pub struct SmbLevel {
 
@@ -30,7 +36,7 @@ impl SmbLevel {
                     '?' => (0x01, &mut level_objects),
                     '!' => (0x00, &mut level_objects),
                     'b' => (0x20, &mut level_objects),
-                    '0' => (0x60, &mut level_objects),
+                    '0' => (0x30, &mut level_objects),
                     'g' => (0x06, &mut enemy_objects),
                     _ => continue
                 };
@@ -65,8 +71,36 @@ impl SmbLevel {
         for x in xs {
             let slice = level.get_mut(&x).unwrap();
             if slice.len() <= 3 { continue; }
+            let mut new_slice = vec![];
 
-            println!("Could not make x={} fit within 3 object limit", x);
+            let &(mut last_start_y, mut last_start_num) = slice.get(0).unwrap();
+            let mut count = 1;
+
+            for i in 0..slice.len() {
+                let &(y, number) = slice.get(i).unwrap();
+
+                if last_start_num == number && y == last_start_y+count
+                        && count<=16 && i < slice.len()-1 {
+                    count += 1;
+                } else {
+                    if count >1 && GROUPABLE.contains_key(&last_start_num) {
+                        let number = GROUPABLE.get(&last_start_num).unwrap().1 + count;
+                        new_slice.push((last_start_y, number));
+                    } else {
+                        for i in 0..count {
+                            new_slice.push((last_start_y+i, last_start_num));
+                        }
+                    }
+                    last_start_y = y;
+                    last_start_num = number;
+                    count = 1;
+                }
+            }
+
+            *slice = new_slice;
+            if slice.len() <= 3 { continue; }
+
+            panic!("Could not make x={} fit within 3 object limit", x);
         }
     }
 
