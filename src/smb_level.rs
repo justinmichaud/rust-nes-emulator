@@ -17,6 +17,7 @@ impl SmbLevel {
     // This is not optimal, but will hopefully be good enough
     fn raw_level() -> (HashMap<usize, Vec<(u8, u8)>>, HashMap<usize, Vec<(u8, u8)>>, u8) {
         let mut start_bt = 0;
+        let mut last_bt = 0;
         let mut level_objects = HashMap::new();
         let mut enemy_objects = HashMap::new();
         let level_in = lines_from_file("assets/0.level");
@@ -26,7 +27,8 @@ impl SmbLevel {
                 let c = level_in.get(y).unwrap().chars().nth(x).unwrap();
 
                 let (number, map) = match c {
-                    '.' => (0x04, &mut level_objects),
+                    '?' => (0x0, &mut level_objects),
+                    'b' => (0x20, &mut level_objects),
                     'g' => (0x06, &mut enemy_objects),
                     _ => continue
                 };
@@ -40,12 +42,14 @@ impl SmbLevel {
             if c == ' ' { continue; }
             let i = u8::from_str_radix(&c.to_string(), 16).unwrap();
 
-            if x > 1 {
+            if x >= 1 && i != last_bt {
                 let objs = level_objects.entry(x-1).or_insert(vec![]);
                 objs.insert(0, (14, i));
+                last_bt = i;
             }
-            else {
+            else if x < 1 {
                 start_bt = i;
+                last_bt = i;
             }
         }
 

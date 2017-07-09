@@ -1,3 +1,9 @@
+#![feature(inclusive_range_syntax)]
+
+mod ines;
+use ines::write_bytes_to_file;
+
+const LEVEL_HEIGHT: u8 = 12;
 const LEVEL_OBJECTS: [u8; 163] = [
     0x48, 0x0f,
     0x0e, 0x01, 0x5e, 0x02, 0xa7, 0x00, 0xbc, 0x73, 0x1a, 0xe0,
@@ -19,8 +25,28 @@ const LEVEL_OBJECTS: [u8; 163] = [
     0xfd
 ];
 
+fn put(level: &mut Vec<Vec<u8>>, x: u8, p_x: usize, y: u8, c: u8) {
+    let x = x as usize + p_x*16;
+    let y = if y >= LEVEL_HEIGHT { 0 } else { LEVEL_HEIGHT - y };
+
+    while level.len() <= x {
+        let mut v = vec![b' '; LEVEL_HEIGHT as usize + 1];
+        if level.len() > 0 {
+            v[LEVEL_HEIGHT as usize] = *level.last().unwrap().get(LEVEL_HEIGHT as usize).unwrap();
+        }
+        level.push(v);
+    }
+
+    *level.get_mut(x).unwrap().get_mut(y as usize).unwrap() = c;
+}
+
 fn main() {
+    let mut level: Vec<Vec<u8>> = vec![];
+
     let mut i = 2;
+    let mut p_x = 0;
+    let mut bt = LEVEL_OBJECTS[1]&0x0F;
+
     while LEVEL_OBJECTS[i] != 0xFD {
         let b = LEVEL_OBJECTS[i];
         let x = (b&0b11110000)>>4;
@@ -35,14 +61,52 @@ fn main() {
             let v = b2&0b00001111;
 
             i += 3;
+
+            if p {
+                p_x += 1;
+            }
+
             println!("{}, {}, {}, {:X}-{:X}", x,y,p,v,n);
+            put(&mut level, x, p_x, y, b' ');
         } else {
             let b = LEVEL_OBJECTS[i+1];
             let p = (b&0b10000000)>0;
             let n = b&0b01111111;
 
             i += 2;
-            println!("{}, {}, {}, {:X}", x,y,p,n);
+
+            if p {
+                p_x += 1;
+            }
+
+            let c = format!("{:X}", bt).chars().next().unwrap();
+            put(&mut level, x, p_x, LEVEL_HEIGHT, c as u8);
+
+            if y == 14 && n < 0x3F {
+                bt = n;
+                let c = format!("{:X}", bt).chars().next().unwrap();
+                put(&mut level, x, p_x, LEVEL_HEIGHT, c as u8);
+            } else if y < 12 && n >= 0x50 && n <= 0x5F {
+                for i in 0...(n-0x50) {
+                    put(&mut level, x + i, p_x, y, b'b');
+                }
+            } else if y < 12 && n == 0 {
+                put(&mut level, x, p_x, y, b'b')
+            } else {
+                println!("{}, {}, {}, {:X}", x, y, p, n);
+                put(&mut level, x, p_x, y, b' ');
+            }
         }
     }
+
+    let mut out = vec![];
+
+    for y in (0...LEVEL_HEIGHT).rev() {
+        for x in 0..level.len() {
+            out.push(*level.get(x).unwrap().get(y as usize).unwrap());
+        }
+        out.push(b'\n');
+    }
+
+    write_bytes_to_file(format!("assets/0.level"), out.as_slice());
 }
