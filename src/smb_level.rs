@@ -1,5 +1,6 @@
 use nes::*;
 use ines::lines_from_file;
+use std::collections::HashMap;
 
 pub struct SmbLevel {
 
@@ -10,36 +11,62 @@ impl SmbLevel {
         SmbLevel {}
     }
 
-    pub fn load(&mut self, chipset: &mut Chipset) {
-        chipset.write(0x8000 - 16 + 0x1CCC, 0x25); // Set area
-
-        let mut level_objects = vec![0b10_100_000, 0b10_00_0000];
-        let mut enemy_objects = vec![];
+    fn raw_level() -> (HashMap<usize, Vec<(u8, u8)>>, HashMap<usize, Vec<(u8, u8)>>) {
+        let mut level_objects = HashMap::new();
+        let mut enemy_objects = HashMap::new();
         let level_in = lines_from_file("assets/0.level");
-
-        let mut last_page_level = 0;
-        let mut last_page_enemy = 0;
 
         for x in 0..level_in[0].len() {
             for y in 0...level_in.len()-1 {
                 let c = level_in.get(y).unwrap().chars().nth(x).unwrap();
 
-                let (mut number, arr, page) = match c {
-                    '.' => (0x04, &mut level_objects, &mut last_page_level),
-                    'g' => (0x06, &mut enemy_objects, &mut last_page_enemy),
+                let (number, map) = match c {
+                    '.' => (0x04, &mut level_objects),
+                    'g' => (0x06, &mut enemy_objects),
                     _ => continue
                 };
 
-                if x/16 > *page {
-                    number |= 0b10000000;
-                    *page = x/16;
-                }
-
-                arr.push((((x&0x0F) as u8) << 4) + ((y as u8) & 0x0F));
-                arr.push(number);
+                let objs = map.entry(x).or_insert(vec![]);
+                objs.push((y as u8, number));
             }
         }
 
+        (level_objects, enemy_objects)
+    }
+
+    fn paginate(level: HashMap<usize, Vec<(u8, u8)>>) -> Vec<u8> {
+        let mut paginated = vec![];
+        let mut last_page = 0;
+
+        let mut xs: Vec<&usize> = level.keys().collect();
+        xs.sort();
+
+        for x in xs {
+            let slice = level.get(&x).unwrap();
+
+            for &(y, mut number) in slice {
+                if x/16 > last_page {
+                    number |= 0b10000000;
+                    last_page = x/16;
+                }
+
+                paginated.push((((x&0x0F) as u8) << 4) + ((y as u8) & 0x0F));
+                paginated.push(number);
+            }
+        }
+
+        paginated
+    }
+
+    pub fn load(&mut self, chipset: &mut Chipset) {
+        chipset.write(0x8000 - 16 + 0x1CCC, 0x25); // Set area
+
+        let (level_objects, enemy_objects) = SmbLevel::raw_level();
+
+        let mut level_objects = SmbLevel::paginate(level_objects);
+        let mut enemy_objects = SmbLevel::paginate(enemy_objects);
+        level_objects.insert(0, 0x40);
+        level_objects.insert(1, 0x00);
         level_objects.push(0xFD);
         enemy_objects.push(0xFF);
 
