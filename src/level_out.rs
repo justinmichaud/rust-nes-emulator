@@ -52,66 +52,48 @@ fn main() {
         let x = (b&0b11110000)>>4;
         let y = b&0b00001111;
 
-        if y == 15 {
-            let b = LEVEL_OBJECTS[i+1];
-            let b2 = LEVEL_OBJECTS[i+2];
-            let y = (b&0b11110000)>>4;
-            let p = (b2&0b10000000)>0;
-            let n = (b2&0b01110000) + (b&0b00001111);
-            let v = b2&0b00001111;
+        let b = LEVEL_OBJECTS[i+1];
+        let p = (b&0b10000000)>0;
+        let n = b&0b01111111;
 
-            i += 3;
+        i += 2;
 
-            if p {
-                p_x += 1;
-            }
+        if p {
+            p_x += 1;
+        }
 
-            println!("{}, {}, {}, {:X}-{:X}", x,y,p,v,n);
-            put(&mut level, x as usize, p_x, y, b' ');
-        } else {
-            let b = LEVEL_OBJECTS[i+1];
-            let p = (b&0b10000000)>0;
-            let n = b&0b01111111;
+        let c = format!("{:X}", bt).chars().next().unwrap();
+        put(&mut level, x as usize, p_x, LEVEL_HEIGHT, c as u8);
 
-            i += 2;
-
-            if p {
-                p_x += 1;
-            }
-
+        if y == 14 && n < 0x3F {
+            bt = n;
             let c = format!("{:X}", bt).chars().next().unwrap();
-            put(&mut level, x as usize, p_x, LEVEL_HEIGHT, c as u8);
-
-            if y == 14 && n < 0x3F {
-                bt = n;
-                let c = format!("{:X}", bt).chars().next().unwrap();
-                put(&mut level, x as usize, p_x, LEVEL_HEIGHT, c as u8);
-            } else if y < 12 && n >= 0x20 && n <= 0x2F {
-                for i in 0...(n-0x20) {
-                    put(&mut level, x as usize + i as usize, p_x, y, b'b');
-                }
-            } else if y < 12 && n >= 0x50 && n <= 0x5F {
-                for i in 0...(n-0x50) {
-                    put(&mut level, x as usize, p_x, y+i, b'b');
-                }
-            } else if y < 12 && n >= 0x30 && n <= 0x3F {
-                for i in 0...(n-0x30) {
-                    put(&mut level, x as usize + i as usize, p_x, y, b'.');
-                }
-            } else if y < 12 && n >= 0x60 && n <= 0x6F {
-                for i in 0...(n-0x60) {
-                    put(&mut level, x as usize, p_x, y+i, b'.');
-                }
-            } else if y < 12 && n == 0 {
-                put(&mut level, x as usize, p_x, y, b'!')
-            } else if y < 12 && n == 1 {
-                put(&mut level, x as usize, p_x, y, b'?')
-            } else if y < 12 && n == 73 {
-                put(&mut level, x as usize, p_x, y, b'p')
-            } else {
-                println!("{}, {}, {}, {:X}", x, y, p, n);
-                put(&mut level, x as usize, p_x, y, b' ');
+            put(&mut level, x as usize + 1, p_x, LEVEL_HEIGHT, c as u8);
+        } else if y < 12 && n >= 0x20 && n <= 0x2F {
+            for i in 0...(n-0x20) {
+                put(&mut level, x as usize + i as usize, p_x, y, b'b');
             }
+        } else if y < 12 && n >= 0x50 && n <= 0x5F {
+            for i in 0...(n-0x50) {
+                put(&mut level, x as usize, p_x, y+i, b'b');
+            }
+        } else if y < 12 && n >= 0x30 && n <= 0x3F {
+            for i in 0...(n-0x30) {
+                put(&mut level, x as usize + i as usize, p_x, y, b'.');
+            }
+        } else if y < 12 && n >= 0x60 && n <= 0x6F {
+            for i in 0...(n-0x60) {
+                put(&mut level, x as usize, p_x, y+i, b'.');
+            }
+        } else if y < 12 && n == 0 {
+            put(&mut level, x as usize, p_x, y, b'!')
+        } else if y < 12 && n == 1 {
+            put(&mut level, x as usize, p_x, y, b'?')
+        } else if y < 12 && n == 73 {
+            put(&mut level, x as usize, p_x, y, b'p')
+        } else {
+            println!("{}, {}, {}, {:X}", x, y, p, n);
+            put(&mut level, x as usize, p_x, y, b' ');
         }
     }
 
