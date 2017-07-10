@@ -75,12 +75,28 @@ impl SmbLevel {
         (level_objects, enemy_objects, start_bt)
     }
 
+    fn get(level: &HashMap<usize, Vec<(u8, u8)>>, x: usize, y: u8) -> Option<usize> {
+        let slice = level.get(&x);
+        if slice.is_none() { return None; }
+        let slice = slice.unwrap();
+
+        for i in 0..slice.len() {
+            let &(ly, _) = slice.get(i).unwrap();
+
+            if y == ly {
+                return Some(i);
+            }
+        }
+
+        None
+    }
+
     fn combine_objects(level: &mut HashMap<usize, Vec<(u8, u8)>>) {
         let mut xs: Vec<usize> = level.keys().map(|x| x.clone()).collect();
         xs.sort();
 
-        for x in xs {
-            let slice = level.get_mut(&x).unwrap();
+        for x in &xs {
+            let slice = level.get_mut(x).unwrap();
             let mut new_slice = vec![];
 
             let &(mut last_start_y, mut last_start_num) = slice.get(0).unwrap();
@@ -113,9 +129,49 @@ impl SmbLevel {
             }
 
             *slice = new_slice;
-            if slice.len() <= 3 { continue; }
+        }
 
-            println!("Could not make x={} fit within 3 object limit", x);
+        { let i = xs.len()-1; xs.remove(i); }
+
+        for x in xs {
+            let slice = {
+                let slice = level.get_mut(&x);
+                if slice.is_none() { continue; }
+                slice.unwrap().clone()
+            };
+
+            for i in 0..slice.len() {
+                let &(y, number) = slice.get(i).unwrap();
+                if GROUPABLE.get(&number).is_none()
+                    || GROUPABLE.get(&number).unwrap().0 == 0xFF {
+                    continue;
+                }
+
+                let mut i = 1;
+                loop {
+                    let next = SmbLevel::get(level, x+i,y);
+                    if next.is_none() { break; }
+                    let next_idx = next.unwrap();
+                    let next = level.get(&(x+i)).unwrap().get(next_idx).unwrap().clone();
+                    if next.1 != number { break; }
+
+                    level.get_mut(&(x+i)).unwrap().remove(next_idx);
+                    if level.get(&(x+i)).unwrap().is_empty() {
+                        level.remove(&(x+i));
+                    }
+                    i += 1;
+                }
+                if i == 1 { continue; }
+
+                // Do grouping here
+            }
+
+            if slice.len() == 3 {
+                println!("Could not make x={} fit within 2 object limit", x);
+            }
+            if slice.len() > 3 {
+                println!("********* Could not make x={} fit within 3 object limit ******", x);
+            }
         }
     }
 
