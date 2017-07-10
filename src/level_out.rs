@@ -27,7 +27,7 @@ const LEVEL_OBJECTS: [u8; 163] = [
 
 fn put(level: &mut Vec<Vec<u8>>, x: usize, p_x: usize, y: u8, c: u8) {
     let x = x as usize + p_x*16;
-    let y = if y >= LEVEL_HEIGHT { 0 } else { LEVEL_HEIGHT - y };
+    let y = if y > LEVEL_HEIGHT { 0 } else { y };
 
     while level.len() <= x {
         let mut v = vec![b' '; LEVEL_HEIGHT as usize + 1];
@@ -99,7 +99,7 @@ fn main() {
 
     let mut out = vec![];
 
-    for y in (0...LEVEL_HEIGHT).rev() {
+    for y in 0...LEVEL_HEIGHT {
         for x in 0..level.len() {
             out.push(*level.get(x).unwrap().get(y as usize).unwrap());
         }
