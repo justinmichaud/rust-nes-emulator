@@ -96,11 +96,11 @@ fn main() {
                 }
             } else if y < 12 && n >= 0x30 && n <= 0x3F {
                 for i in 0...(n-0x30) {
-                    put(&mut level, x as usize + i as usize, p_x, y, b'0');
+                    put(&mut level, x as usize + i as usize, p_x, y, b'.');
                 }
             } else if y < 12 && n >= 0x60 && n <= 0x6F {
                 for i in 0...(n-0x60) {
-                    put(&mut level, x as usize, p_x, y+i, b'0');
+                    put(&mut level, x as usize, p_x, y+i, b'.');
                 }
             } else if y < 12 && n == 0 {
                 put(&mut level, x as usize, p_x, y, b'!')

@@ -6,6 +6,7 @@ use phf::Map;
 const GROUPABLE: Map<u8, (u8, u8)> = phf_map!{
     0x20u8 => (0x20, 0x50),
     0x30u8 => (0x30, 0x60),
+    0x40u8 => (0x40, 0xFF),
 };
 
 pub struct SmbLevel {
@@ -36,7 +37,8 @@ impl SmbLevel {
                     '?' => (0x01, &mut level_objects),
                     '!' => (0x00, &mut level_objects),
                     'b' => (0x20, &mut level_objects),
-                    '0' => (0x30, &mut level_objects),
+                    '.' => (0x30, &mut level_objects),
+                    '0' => (0x40, &mut level_objects),
                     'g' => (0x06, &mut enemy_objects),
                     _ => continue
                 };
@@ -83,7 +85,8 @@ impl SmbLevel {
                         && count<=16 && i < slice.len()-1 {
                     count += 1;
                 } else {
-                    if count >1 && GROUPABLE.contains_key(&last_start_num) {
+                    if count >1 && GROUPABLE.get(&last_start_num).is_some()
+                            && GROUPABLE.get(&last_start_num).unwrap().1 != 0xFF {
                         let number = GROUPABLE.get(&last_start_num).unwrap().1 + count;
                         new_slice.push((last_start_y, number));
                     } else {
@@ -100,7 +103,7 @@ impl SmbLevel {
             *slice = new_slice;
             if slice.len() <= 3 { continue; }
 
-            panic!("Could not make x={} fit within 3 object limit", x);
+            println!("Could not make x={} fit within 3 object limit", x);
         }
     }
 
