@@ -34,22 +34,24 @@ impl SmbLevel {
             for y in 0...level_in.len()-2 {
                 let c = level_in.get(y).unwrap().chars().nth(x).unwrap();
 
-                let (number, map) = match c {
-                    '?' => (0x01, &mut level_objects),
-                    '!' => (0x00, &mut level_objects),
-                    'M' => (0x04, &mut level_objects),
-                    'S' => (0x06, &mut level_objects),
-                    'C' => (0x07, &mut level_objects),
-                    'U' => (0x08, &mut level_objects),
-                    'b' => (0x20, &mut level_objects),
-                    '.' => (0x30, &mut level_objects),
-                    '0' => (0x40, &mut level_objects),
-                    'p' => (0x71, &mut level_objects),
-                    'g' => (0x06, &mut enemy_objects),
+                let (number, y_restrict, map) = match c {
+                    '?' => (0x01, 0, &mut level_objects),
+                    '!' => (0x00, 0, &mut level_objects),
+                    'M' => (0x04, 0, &mut level_objects),
+                    'S' => (0x06, 0, &mut level_objects),
+                    'C' => (0x07, 0, &mut level_objects),
+                    'U' => (0x08, 0, &mut level_objects),
+                    'b' => (0x20, 0, &mut level_objects),
+                    '.' => (0x30, 0, &mut level_objects),
+                    '0' => (0x40, 0, &mut level_objects),
+                    'p' => (0x71, 0, &mut level_objects),
+                    'h' => (12 - y as u8, 12, &mut level_objects),
+                    'g' => (0x06, 0, &mut enemy_objects),
                     _ => continue
                 };
 
                 let objs = map.entry(x).or_insert(vec![]);
+                let y = if y_restrict > 0 { y_restrict } else { y };
                 objs.push((y as u8, number));
             }
 
