@@ -93,6 +93,7 @@ fn main() {
             put(&mut level, x as usize, p_x, y, b'p')
         } else {
             println!("{}, {}, {}, {:X}", x, y, p, n);
+            let y = if y >= 12 { 0 } else { y };
             put(&mut level, x as usize, p_x, y, b' ');
         }
     }
