@@ -37,6 +37,10 @@ impl SmbLevel {
                 let (number, map) = match c {
                     '?' => (0x01, &mut level_objects),
                     '!' => (0x00, &mut level_objects),
+                    'M' => (0x04, &mut level_objects),
+                    'S' => (0x06, &mut level_objects),
+                    'C' => (0x07, &mut level_objects),
+                    'U' => (0x08, &mut level_objects),
                     'b' => (0x20, &mut level_objects),
                     '.' => (0x30, &mut level_objects),
                     '0' => (0x40, &mut level_objects),
