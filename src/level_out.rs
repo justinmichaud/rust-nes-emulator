@@ -81,6 +81,14 @@ fn main() {
             for i in 0...(n-0x30) {
                 put(&mut level, x as usize + i as usize, p_x, y, b'.');
             }
+        } else if y < 12 && n >= 0x70 && n <= 0x77 {
+            for i in 0...(n-0x70) {
+                put(&mut level, x as usize, p_x, y+i, b'p');
+            }
+        } else if y < 12 && n >= 0x78 && n <= 0x7F {
+            for i in 0...(n-0x78) {
+                put(&mut level, x as usize, p_x, y+i, b'p');
+            }
         } else if y < 12 && n >= 0x60 && n <= 0x6F {
             for i in 0...(n-0x60) {
                 put(&mut level, x as usize, p_x, y+i, b'.');
@@ -89,8 +97,8 @@ fn main() {
             put(&mut level, x as usize, p_x, y, b'!')
         } else if y < 12 && n == 1 {
             put(&mut level, x as usize, p_x, y, b'?')
-        } else if y < 12 && n == 73 {
-            put(&mut level, x as usize, p_x, y, b'p')
+        } else if y < 12 && n == 0x0f {
+            put(&mut level, x as usize, p_x, y, b'n')
         } else {
             println!("{}, {}, {}, {:X}", x, y, p, n);
             let y = if y >= 12 { 0 } else { y };
