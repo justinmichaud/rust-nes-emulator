@@ -40,12 +40,13 @@ impl SmbLevel {
                     'M' => (0x04, 0, &mut level_objects),
                     'S' => (0x06, 0, &mut level_objects),
                     'C' => (0x07, 0, &mut level_objects),
-                    'U' => (0x08, 0, &mut level_objects),
+                    'u' => (0x08, 0, &mut level_objects),
                     'b' => (0x20, 0, &mut level_objects),
                     '.' => (0x30, 0, &mut level_objects),
                     '0' => (0x40, 0, &mut level_objects),
                     'p' => (0x71, 0, &mut level_objects),
                     'h' => (12 - y as u8, 12, &mut level_objects),
+                    'U' => (y as u8 + 0x40, 15, &mut level_objects),
                     'g' => (0x06, 0, &mut enemy_objects),
                     _ => continue
                 };

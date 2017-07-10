@@ -101,6 +101,14 @@ fn main() {
             for i in 0...(n-0x70) {
                 put(&mut level, x as usize + i as usize, p_x, 7, b'?');
             }
+        } else if y == 15 && n >= 0x30 && n <= 0x3F {
+            for i in 0...(n-0x30) {
+                for j in 1...i {
+                    put(&mut level, x as usize + i as usize, p_x, 11-j, b'.');
+                }
+            }
+        } else if y == 15 && n >= 0x40 && n <= 0x4F {
+            put(&mut level, x as usize as usize, p_x, (n-0x40), b'U');
         } else if y == 12 && n <= 0x0F {
             put(&mut level, x as usize, p_x, 12 - n, b'h');
         } else if y < 12 && n >= 0x40 && n <= 0x4F {
@@ -118,7 +126,7 @@ fn main() {
         } else if y < 12 && n == 7 {
             put(&mut level, x as usize, p_x, y, b'C')
         } else if y < 12 && n == 8 {
-            put(&mut level, x as usize, p_x, y, b'U')
+            put(&mut level, x as usize, p_x, y, b'u')
         } else if y < 12 && n == 0x0f {
             put(&mut level, x as usize, p_x, y, b'n')
         } else {
