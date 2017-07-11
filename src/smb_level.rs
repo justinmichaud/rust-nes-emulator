@@ -7,7 +7,7 @@ const GROUPABLE: Map<u8, (u8, u8)> = phf_map!{
     0x20u8 => (0x20, 0x50),
     0x30u8 => (0x30, 0x60),
     0x40u8 => (0x40, 0xFF),
-    0x71u8 => (0xFF, 0x70),
+    0x70u8 => (0xFF, 0x70),
 };
 
 pub struct SmbLevel {
@@ -44,7 +44,7 @@ impl SmbLevel {
                     'b' => (0x20, 0, &mut level_objects),
                     '.' => (0x30, 0, &mut level_objects),
                     '0' => (0x40, 0, &mut level_objects),
-                    'p' => (0x71, 0, &mut level_objects),
+                    'p' => (0x70, 0, &mut level_objects),
                     'h' => (12 - y as u8, 12, &mut level_objects),
                     'U' => (y as u8 + 0x40, 15, &mut level_objects),
                     'g' => (0x06, 0, &mut enemy_objects),
@@ -102,17 +102,13 @@ impl SmbLevel {
             let &(mut last_start_y, mut last_start_num) = slice.get(0).unwrap();
             let mut count = 1;
 
-            for i in 0..slice.len() {
+            for i in 1..slice.len() {
                 let &(y, number) = slice.get(i).unwrap();
 
                 if last_start_num == number && y == last_start_y+count
-                        && count<=16 && i < slice.len()-1 {
+                        && count<=16 {
                     count += 1;
                 } else {
-                    if i == slice.len()-1 && last_start_num == number && y == last_start_y+count {
-                        count += 1;
-                    }
-
                     if count >1 && GROUPABLE.get(&last_start_num).is_some()
                             && GROUPABLE.get(&last_start_num).unwrap().1 != 0xFF {
                         let number = GROUPABLE.get(&last_start_num).unwrap().1 + count - 1;
@@ -125,6 +121,16 @@ impl SmbLevel {
                     last_start_y = y;
                     last_start_num = number;
                     count = 1;
+                }
+            }
+
+            if count >1 && GROUPABLE.get(&last_start_num).is_some()
+                && GROUPABLE.get(&last_start_num).unwrap().1 != 0xFF {
+                let number = GROUPABLE.get(&last_start_num).unwrap().1 + count - 1;
+                new_slice.push((last_start_y, number));
+            } else {
+                for i in 0..count {
+                    new_slice.push((last_start_y+i, last_start_num));
                 }
             }
 
@@ -147,23 +153,24 @@ impl SmbLevel {
                     continue;
                 }
 
-                let mut i = 1;
+                let mut count = 1;
                 loop {
-                    let next = SmbLevel::get(level, x+i,y);
+                    let next = SmbLevel::get(level, x+count,y);
                     if next.is_none() { break; }
                     let next_idx = next.unwrap();
-                    let next = level.get(&(x+i)).unwrap().get(next_idx).unwrap().clone();
+                    let next = level.get(&(x+count)).unwrap().get(next_idx).unwrap().clone();
                     if next.1 != number { break; }
 
-                    level.get_mut(&(x+i)).unwrap().remove(next_idx);
-                    if level.get(&(x+i)).unwrap().is_empty() {
-                        level.remove(&(x+i));
+                    level.get_mut(&(x+count)).unwrap().remove(next_idx);
+                    if level.get(&(x+count)).unwrap().is_empty() {
+                        level.remove(&(x+count));
                     }
-                    i += 1;
+                    count += 1;
                 }
-                if i == 1 { continue; }
+                if count == 1 { continue; }
 
-                // Do grouping here
+                let number = GROUPABLE.get(&number).unwrap().0 + count as u8 - 1;
+                *level.get_mut(&x).unwrap().get_mut(i).unwrap() = (y, number);
             }
 
             if slice.len() == 3 {
@@ -216,6 +223,8 @@ impl SmbLevel {
         for i in 0..level_objects.len() {
             chipset.write(0x8000 - 16 + 0x269E + i as u16, level_objects[i]);
         }
+
+        println!("{:?}", level_objects);
 
         for i in 0..enemy_objects.len() {
             chipset.write(0x8000 - 16 + 0x1F11 + i as u16, enemy_objects[i]);
