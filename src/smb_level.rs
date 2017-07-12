@@ -11,28 +11,33 @@ const GROUPABLE: Map<u8, (u8, u8)> = phf_map!{
 };
 
 pub struct SmbLevel {
-
+    style: u8,
 }
 
 impl SmbLevel {
     pub fn new() -> SmbLevel {
-        SmbLevel {}
+        SmbLevel { style: 0 }
     }
 
     // The game only allows three blocks in the same y position, and uses complex grouping
     // of spaces and block types to get around this. Instead, here we will record the position
     // of objects, with the last line of the level representing the block type
     // This is not optimal, but will hopefully be good enough
-    fn raw_level() -> (HashMap<usize, Vec<(u8, u8)>>, HashMap<usize, Vec<(u8, u8)>>, u8) {
+    fn raw_level() -> (HashMap<usize, Vec<(u8, u8)>>, HashMap<usize, Vec<(u8, u8)>>, u8, u8, u8, u8) {
         let mut start_bt = 0;
         let mut last_bt = 0;
         let mut level_objects = HashMap::new();
         let mut enemy_objects = HashMap::new();
-        let level_in = lines_from_file("assets/0.level");
+        let mut level_in = lines_from_file("assets/0.level");
 
-        for x in 0..level_in[0].len() {
-            for y in 0...level_in.len()-2 {
-                let c = level_in.get(y).unwrap().chars().nth(x).unwrap();
+        let first_line = level_in.remove(0);
+        let style = u8::from_str_radix(&first_line.chars().nth(0).unwrap().to_string(), 16).unwrap();
+        let scenery = u8::from_str_radix(&first_line.chars().nth(1).unwrap().to_string(), 16).unwrap();
+        let ground = u8::from_str_radix(&first_line.chars().nth(2).unwrap().to_string(), 16).unwrap();
+
+        for x in 0..level_in.len() {
+            for y in 1...level_in[0].len()-1 {
+                let c = level_in.get(x).unwrap().chars().nth(level_in[0].len()-y-1).unwrap();
 
                 let (number, y_restrict, map) = match c {
                     '?' => (0x01, 0, &mut level_objects),
@@ -47,6 +52,8 @@ impl SmbLevel {
                     'p' => (0x70, 0, &mut level_objects),
                     'h' => (12 - y as u8, 12, &mut level_objects),
                     'U' => (y as u8 + 0x40, 15, &mut level_objects),
+                    'F' => (0x41, 13, &mut level_objects),
+                    '^' => (0x26, 15, &mut level_objects),
                     'g' => (0x06, 0, &mut enemy_objects),
                     _ => continue
                 };
@@ -57,7 +64,7 @@ impl SmbLevel {
             }
 
             // Block type
-            let c = level_in.last().unwrap().chars().nth(x).unwrap();
+            let c = level_in.get(x).unwrap().chars().nth(0).unwrap();
             if c == ' ' { continue; }
             let i = u8::from_str_radix(&c.to_string(), 16).unwrap();
 
@@ -72,7 +79,7 @@ impl SmbLevel {
             }
         }
 
-        (level_objects, enemy_objects, start_bt)
+        (level_objects, enemy_objects, start_bt, style, scenery, ground)
     }
 
     fn get(level: &HashMap<usize, Vec<(u8, u8)>>, x: usize, y: u8) -> Option<usize> {
@@ -209,14 +216,15 @@ impl SmbLevel {
     pub fn load(&mut self, chipset: &mut Chipset) {
         chipset.write(0x8000 - 16 + 0x1CCC, 0x25); // Set area
 
-        let (mut level_objects, enemy_objects, bt) = SmbLevel::raw_level();
+        let (mut level_objects, enemy_objects, bt, style, scenery, ground) = SmbLevel::raw_level();
+        self.style = style;
 
         SmbLevel::combine_objects(&mut level_objects);
 
         let mut level_objects = SmbLevel::paginate(level_objects);
         let mut enemy_objects = SmbLevel::paginate(enemy_objects);
         level_objects.insert(0, 0x40);
-        level_objects.insert(1, 0x00 + bt);
+        level_objects.insert(1, ((scenery&0b00000011)<<6) + ((ground&0b00000011)<<4) + bt);
         level_objects.push(0xFD);
         enemy_objects.push(0xFF);
 
@@ -232,6 +240,6 @@ impl SmbLevel {
     }
 
     pub fn persist(&mut self, chipset: &mut Chipset) {
-        chipset.write(0x074e, 1); // Set area type
+        chipset.write(0x074e, self.style); // Set area type
     }
 }

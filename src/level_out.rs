@@ -352,6 +352,8 @@ fn output_level(index: usize, to: String) {
             for i in 0...(n-0x70) {
                 put(&mut level, x as usize + i as usize, p_x, 7, b'?');
             }
+        } else if y == 13 && n == 0x41 {
+            put(&mut level, x as usize, p_x, LEVEL_HEIGHT-1, b'F');
         } else if y == 15 && n >= 0x30 && n <= 0x3F {
             for i in 0...(n-0x30) {
                 for j in 0...i {
@@ -360,6 +362,8 @@ fn output_level(index: usize, to: String) {
             }
         } else if y == 15 && n >= 0x40 && n <= 0x4F {
             put(&mut level, x as usize as usize, p_x, (n-0x40), b'U');
+        } else if y == 15 && n >= 0x20 && n <= 0x2A {
+            put(&mut level, x as usize as usize, p_x, LEVEL_HEIGHT-1, b'^');
         } else if y == 12 && n <= 0x0F {
             put(&mut level, x as usize, p_x, 12 - n, b'h');
         } else if y < 12 && n >= 0x40 && n <= 0x4F {
@@ -389,8 +393,13 @@ fn output_level(index: usize, to: String) {
 
     let mut out = vec![];
 
-    for y in 0...LEVEL_HEIGHT {
-        for x in 0..level.len() {
+    out.push(format!("{:X}", 1).chars().next().unwrap() as u8);
+    out.push(format!("{:X}", LEVELS[1]&0b11000000).chars().next().unwrap() as u8);
+    out.push(format!("{:X}", LEVELS[1]&0b00110000).chars().next().unwrap() as u8);
+    out.push(b'\n');
+
+    for x in 0..level.len() {
+        for y in (0...LEVEL_HEIGHT).rev() {
             out.push(*level.get(x).unwrap().get(y as usize).unwrap());
         }
         out.push(b'\n');
