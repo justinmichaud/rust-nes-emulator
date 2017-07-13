@@ -315,7 +315,7 @@ fn output_level(index: usize, to: String) {
     let mut p_x = 0;
     let mut bt = level_objects[1]&0x0F;
 
-    let c = format!("{:X}", bt).chars().next().unwrap();
+    let c = format!("{:X}", bt&0xF).chars().next().unwrap();
     put(&mut level, 0, p_x, LEVEL_HEIGHT, c as u8);
 
     while level_objects[i] != 0xFD {
@@ -333,12 +333,12 @@ fn output_level(index: usize, to: String) {
             p_x += 1;
         }
 
-        let c = format!("{:X}", bt).chars().next().unwrap();
+        let c = format!("{:X}", bt&0xF).chars().next().unwrap();
         put(&mut level, x as usize, p_x, LEVEL_HEIGHT, c as u8);
 
         if y == 14 && n < 0x3F {
             bt = n;
-            let c = format!("{:X}", bt).chars().next().unwrap();
+            let c = format!("{:X}", bt&0xF).chars().next().unwrap();
             put(&mut level, x as usize + 1, p_x, LEVEL_HEIGHT, c as u8);
         } else if y < 12 && n >= 0x20 && n <= 0x2F {
             for i in 0...(n-0x20) {
