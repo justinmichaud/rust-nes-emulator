@@ -324,6 +324,10 @@ fn output_level(index: usize, to: String) {
             for i in 0...(n-0x20) {
                 put(&mut level, x as usize + i as usize, p_x, y, b'b');
             }
+        } else if y < 12 && n >= 0x10 && n <= 0x1F {
+            for i in 0...(n-0x10) {
+                put(&mut level, x as usize + i as usize, p_x, y, b'I');
+            }
         } else if y < 12 && n >= 0x50 && n <= 0x5F {
             for i in 0...(n-0x50) {
                 put(&mut level, x as usize, p_x, y+i, b'b');

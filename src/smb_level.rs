@@ -8,6 +8,7 @@ const GROUPABLE: Map<u8, (u8, u8)> = phf_map!{
     0x30u8 => (0x30, 0x60),
     0x40u8 => (0x40, 0xFF),
     0x70u8 => (0xFF, 0x70),
+    0x10u8 => (0x10, 0xFF),
 };
 
 pub struct SmbLevel {
@@ -49,6 +50,7 @@ impl SmbLevel {
                     'b' => (0x20, 0, &mut level_objects),
                     '.' => (0x30, 0, &mut level_objects),
                     '0' => (0x40, 0, &mut level_objects),
+                    'I' => (0x10, 0, &mut level_objects),
                     'p' => (0x70, 0, &mut level_objects),
                     'h' => (12 - y as u8, 12, &mut level_objects),
                     'U' => (y as u8 + 0x40, 15, &mut level_objects),
