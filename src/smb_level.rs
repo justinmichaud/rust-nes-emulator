@@ -37,7 +37,7 @@ impl SmbLevel {
         let ground = u8::from_str_radix(&first_line.chars().nth(2).unwrap().to_string(), 16).unwrap();
 
         for x in 0..level_in.len() {
-            for y in 1...level_in[0].len()-1 {
+            for y in 0..level_in[0].len()-1 {
                 let c = level_in.get(x).unwrap().chars().nth(level_in[0].len()-y-1).unwrap();
 
                 let (number, y_restrict, map) = match c {
