@@ -394,8 +394,8 @@ fn output_level(index: usize, to: String) {
     let mut out = vec![];
 
     out.push(format!("{:X}", 1).chars().next().unwrap() as u8);
-    out.push(format!("{:X}", LEVELS[1]&0b11000000).chars().next().unwrap() as u8);
-    out.push(format!("{:X}", LEVELS[1]&0b00110000).chars().next().unwrap() as u8);
+    out.push(format!("{:X}", (level_objects[1]&0b11000000)>>6).chars().next().unwrap() as u8);
+    out.push(format!("{:X}", (level_objects[1]&0b00110000)>>4).chars().next().unwrap() as u8);
     out.push(b'\n');
 
     for x in 0..level.len() {
@@ -409,5 +409,5 @@ fn output_level(index: usize, to: String) {
 }
 
 fn main() {
-    output_level(5, format!("assets/0.level"));
+    output_level(6, format!("assets/0.level"));
 }
