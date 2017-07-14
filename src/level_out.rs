@@ -535,7 +535,7 @@ fn put_enemy_data(level_objects: &[u8], level: &mut Vec<Vec<u8>>) {
             continue;
         }
 
-        let y = y - 1;
+        let y = if y == 0 { 0 } else { y - 1 };
 
         if n == 0x06 {
             put(level, x as usize, p_x, y, b'g');
@@ -595,7 +595,10 @@ fn output_level(index: usize, out: &mut Vec<u8>) {
 
 fn main() {
     let mut out = vec![];
-    output_level(0, &mut out);
+
+    for i in 0..1 {//18 {
+        output_level(i, &mut out);
+    }
 
     write_bytes_to_file(format!("assets/0.level"), out.as_slice());
 }
