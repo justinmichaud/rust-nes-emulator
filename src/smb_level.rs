@@ -38,7 +38,7 @@ impl SmbLevel {
 
         for x in 0..level_in.len() {
             for y in 0..level_in[0].len()-1 {
-                let c = level_in.get(x).unwrap().chars().nth(level_in[0].len()-y-1).unwrap();
+                let c = level_in.get(x).unwrap().chars().nth(level_in[0].len()-y-1).unwrap_or_else(|| ' ');
 
                 let (number, y_restrict, map) = match c {
                     '?' => (0x01, 0, &mut level_objects),
