@@ -555,8 +555,7 @@ fn put_enemy_data(level_objects: &[u8], level: &mut Vec<Vec<u8>>) {
     }
 }
 
-fn output_level(index: usize, to: String) {
-    let mut out = vec![];
+fn output_level(index: usize, out: &mut Vec<u8>) {
     let mut level: Vec<Vec<u8>> = vec![];
 
     {
@@ -592,10 +591,11 @@ fn output_level(index: usize, to: String) {
         }
         out.push(b'\n');
     }
-
-    write_bytes_to_file(to, out.as_slice());
 }
 
 fn main() {
-    output_level(0, format!("assets/0.level"));
+    let mut out = vec![];
+    output_level(0, &mut out);
+
+    write_bytes_to_file(format!("assets/0.level"), out.as_slice());
 }
