@@ -56,12 +56,16 @@ impl SmbLevel {
                     'U' => (y as u8 + 0x40, 15, &mut level_objects),
                     'F' => (0x41, 13, &mut level_objects),
                     '^' => (0x26, 15, &mut level_objects),
-                    'g' => (0x06, 0, &mut enemy_objects),
+
+                    'k' => (0x00, 1, &mut enemy_objects),
+                    'g' => (0x06, 1, &mut enemy_objects),
                     _ => continue
                 };
 
                 let objs = map.entry(x).or_insert(vec![]);
-                let y = if y_restrict > 0 { y_restrict } else { y };
+                let y = if y_restrict > 1 { y_restrict } else { y };
+                // Hack to work around enemy coordinates being different
+                let y = if y_restrict == 1 { y + 1 } else { y };
                 objs.push((y as u8, number));
             }
 
@@ -191,7 +195,7 @@ impl SmbLevel {
         }
     }
 
-    fn paginate(level: HashMap<usize, Vec<(u8, u8)>>) -> Vec<u8> {
+    fn paginate(level: HashMap<usize, Vec<(u8, u8)>>, enemy: bool) -> Vec<u8> {
         let mut paginated = vec![];
         let mut last_page = 0;
 
@@ -204,7 +208,17 @@ impl SmbLevel {
             for &(y, mut number) in slice {
                 if x/16 > last_page {
                     number |= 0b10000000;
-                    last_page = x/16;
+                    last_page += 1;
+                }
+
+                if x/16 > last_page {
+                    if enemy {
+                        last_page = x/16;
+                        paginated.push(0b00001111);
+                        paginated.push(last_page as u8);
+                    } else {
+                        println!("Warning! Non-enemy array has page skip!");
+                    }
                 }
 
                 paginated.push((((x&0x0F) as u8) << 4) + ((y as u8) & 0x0F));
@@ -223,8 +237,8 @@ impl SmbLevel {
 
         SmbLevel::combine_objects(&mut level_objects);
 
-        let mut level_objects = SmbLevel::paginate(level_objects);
-        let mut enemy_objects = SmbLevel::paginate(enemy_objects);
+        let mut level_objects = SmbLevel::paginate(level_objects, false);
+        let mut enemy_objects = SmbLevel::paginate(enemy_objects, true);
         level_objects.insert(0, 0x40);
         level_objects.insert(1, ((scenery&0b00000011)<<6) + ((ground&0b00000011)<<4) + bt);
         level_objects.push(0xFD);
