@@ -1,9 +1,18 @@
 #![feature(inclusive_range_syntax)]
+#![feature(plugin)]
+#![plugin(phf_macros)]
+extern crate phf;
+use phf::Map;
 
 mod ines;
 use ines::write_bytes_to_file;
 
-const LEVEL_HEIGHT: u8 = 13;
+pub const BT_PATTERNS: Map<u8, [u8; LEVEL_HEIGHT as usize]> = phf_map!{
+    0u8 => [b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' '],
+    1u8 => [b'=',b'=',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ']
+};
+
+const LEVEL_HEIGHT: u8 = 14;
 const LEVELS: [u8; 1872] = [
     //level 1-1,
     0x50, 0x21,
@@ -387,28 +396,27 @@ const ENEMIES: [u8; 620] = [
     0xff,
 ];
 
-fn put(level: &mut Vec<Vec<u8>>, x: usize, p_x: usize, y: u8, c: u8) {
+fn put(level: &mut Vec<Vec<u8>>, x: usize, p_x: usize, y: u8, c: u8, bt: u8) {
     let x = x as usize + p_x*16;
     let y = if y > LEVEL_HEIGHT { 0 } else { y };
 
     while level.len() <= x {
-        let mut v = vec![b' '; LEVEL_HEIGHT as usize + 1];
-        if level.len() > 0 {
-            v[LEVEL_HEIGHT as usize] = *level.last().unwrap().get(LEVEL_HEIGHT as usize).unwrap();
-        }
+        let mut v = Vec::new();
+        for i in BT_PATTERNS.get(&bt).unwrap() { v.push(*i) };
         level.push(v);
     }
 
     *level.get_mut(x).unwrap().get_mut(y as usize).unwrap() = c;
 }
 
+fn map_y(y: u8) -> u8 {
+    LEVEL_HEIGHT - 1 - y - 1
+}
+
 fn put_level_data(level_objects: &[u8], level: &mut Vec<Vec<u8>>) {
     let mut i = 2;
     let mut p_x = 0;
     let mut bt = level_objects[1]&0x0F;
-
-    let c = format!("{:X}", bt&0xF).chars().next().unwrap();
-    put(level, 0, p_x, LEVEL_HEIGHT, c as u8);
 
     while level_objects[i] != 0xFD {
         let b = level_objects[i];
@@ -425,85 +433,83 @@ fn put_level_data(level_objects: &[u8], level: &mut Vec<Vec<u8>>) {
             p_x += 1;
         }
 
-        let c = format!("{:X}", bt&0xF).chars().next().unwrap();
-        put(level, x as usize, p_x, LEVEL_HEIGHT, c as u8);
-
         if y == 14 && n < 0x3F {
             bt = n;
-            let c = format!("{:X}", bt&0xF).chars().next().unwrap();
-            put(level, x as usize + 1, p_x, LEVEL_HEIGHT, c as u8);
         } else if y < 12 && n >= 0x20 && n <= 0x2F {
             for i in 0...(n-0x20) {
-                put(level, x as usize + i as usize, p_x, y, b'b');
+                put(level, x as usize + i as usize, p_x, map_y(y), b'b', bt);
             }
         } else if y < 12 && n >= 0x10 && n <= 0x1F {
             for i in 0...(n-0x10) {
-                put(level, x as usize + i as usize, p_x, y, b'I');
+                put(level, x as usize + i as usize, p_x, map_y(y), b'I', bt);
             }
         } else if y < 12 && n >= 0x50 && n <= 0x5F {
             for i in 0...(n-0x50) {
-                put(level, x as usize, p_x, y+i, b'b');
+                put(level, x as usize, p_x, map_y(y)+i, b'b', bt);
             }
         } else if y < 12 && n >= 0x30 && n <= 0x3F {
             for i in 0...(n-0x30) {
-                put(level, x as usize + i as usize, p_x, y, b'.');
+                put(level, x as usize + i as usize, p_x, map_y(y), b'.', bt);
             }
         } else if y < 12 && n >= 0x70 && n <= 0x77 {
             for i in 0...(n-0x70) {
-                put(level, x as usize, p_x, y+i, b'p');
+                put(level, x as usize, p_x, map_y(y+i), b'p', bt);
             }
         } else if y < 12 && n >= 0x78 && n <= 0x7F {
             for i in 0...(n-0x78) {
-                put(level, x as usize, p_x, y+i, b'p');
+                put(level, x as usize, p_x, map_y(y+i), b'p', bt);
             }
         } else if y < 12 && n >= 0x60 && n <= 0x6F {
             for i in 0...(n-0x60) {
-                put(level, x as usize, p_x, y+i, b'.');
+                put(level, x as usize, p_x, map_y(y+i), b'.', bt);
             }
         } else if y == 12 && n >= 0x60 && n <= 0x6F {
             for i in 0...(n-0x60) {
-                put(level, x as usize + i as usize, p_x, 3, b'?');
+                put(level, x as usize + i as usize, p_x, map_y(3), b'?', bt);
             }
         } else if y == 12 && n >= 0x70 && n <= 0x7F {
             for i in 0...(n-0x70) {
-                put(level, x as usize + i as usize, p_x, 7, b'?');
+                put(level, x as usize + i as usize, p_x, map_y(7), b'?', bt);
             }
         } else if y == 13 && n == 0x41 {
-            put(level, x as usize, p_x, LEVEL_HEIGHT-1, b'F');
+            put(level, x as usize, p_x, 2, b'F', bt);
         } else if y == 15 && n >= 0x30 && n <= 0x3F {
             for i in 0...(n-0x30) {
                 for j in 0...i {
-                    put(level, x as usize + i as usize, p_x, 10-j, b'.');
+                    put(level, x as usize + i as usize, p_x, map_y(10-j), b'.', bt);
                 }
             }
         } else if y == 15 && n >= 0x40 && n <= 0x4F {
-            put(level, x as usize as usize, p_x, (n-0x40), b'U');
+            put(level, x as usize as usize, p_x, map_y(n-0x40), b'U', bt);
         } else if y == 15 && n >= 0x20 && n <= 0x2A {
-            put(level, x as usize as usize, p_x, LEVEL_HEIGHT-1, b'^');
+            put(level, x as usize as usize, p_x, 2, b'^', bt);
         } else if y == 12 && n <= 0x0F {
-            put(level, x as usize, p_x, 12 - n, b'h');
+            for i in 0...n {
+                put(level, x as usize + i as usize, p_x, 0, b' ', bt);
+                put(level, x as usize + i as usize, p_x, 1, b' ', bt);
+            }
         } else if y < 12 && n >= 0x40 && n <= 0x4F {
             for i in 0...(n-0x40) {
-                put(level, x as usize + i as usize, p_x, y, b'0');
+                put(level, x as usize + i as usize, p_x, map_y(y), b'0', bt);
             }
         } else if y < 12 && n == 0 {
-            put(level, x as usize, p_x, y, b'!')
+            put(level, x as usize, p_x, map_y(y), b'!', bt);
         } else if y < 12 && n == 1 {
-            put(level, x as usize, p_x, y, b'?')
+            put(level, x as usize, p_x, map_y(y), b'?', bt);
         } else if y < 12 && n == 4 {
-            put(level, x as usize, p_x, y, b'M')
+            put(level, x as usize, p_x, map_y(y), b'M', bt);
         } else if y < 12 && n == 6 {
-            put(level, x as usize, p_x, y, b'S')
+            put(level, x as usize, p_x, map_y(y), b'S', bt);
         } else if y < 12 && n == 7 {
-            put(level, x as usize, p_x, y, b'C')
+            put(level, x as usize, p_x, map_y(y), b'C', bt);
         } else if y < 12 && n == 8 {
-            put(level, x as usize, p_x, y, b'u')
+            put(level, x as usize, p_x, map_y(y), b'u', bt);
         } else if y < 12 && n == 0x0f {
-            put(level, x as usize, p_x, y, b'n')
+            put(level, x as usize, p_x, map_y(y), b' ', bt);
         } else {
             println!("Unrecognized level tile: {}, {}, {}, {:X}", x, y, p, n);
             let y = if y >= 12 { 0 } else { y };
-            put(level, x as usize, p_x, y, b' ');
+            put(level, x as usize, p_x, map_y(y), b' ', bt);
         }
     }
 }
@@ -538,17 +544,17 @@ fn put_enemy_data(level_objects: &[u8], level: &mut Vec<Vec<u8>>) {
         let y = if y == 0 { 0 } else { y - 1 };
 
         if n == 0x06 {
-            put(level, x as usize, p_x, y, b'g');
+            put(level, x as usize, p_x, map_y(y), b'g', 255);
         } else if n >= 0x37 && n <= 0x38 {
             for i in 0...(n-0x37+1) {
-                put(level, x as usize + i as usize, p_x, 10-1, b'g');
+                put(level, x as usize + i as usize, p_x, map_y(10), b'g', 255);
             }
         } else if n >= 0x39 && n <= 0x3A {
             for i in 0...(n-0x39+1) {
-                put(level, x as usize + i as usize, p_x, 7-1, b'g');
+                put(level, x as usize + i as usize, p_x, map_y(7), b'g', 255);
             }
         } else if n == 0x00 {
-            put(level, x as usize, p_x, y, b'k');
+            put(level, x as usize, p_x, map_y(y), b'k', 255);
         } else {
             println!("Unrecognized Enemy: {}, {}, {}, {:X}", x, y+1, p, n);
         }
@@ -586,7 +592,7 @@ fn output_level(index: usize, out: &mut Vec<u8>) {
     }
 
     for x in 0..level.len() {
-        for y in (0...LEVEL_HEIGHT).rev() {
+        for y in 0..LEVEL_HEIGHT {
             out.push(*level.get(x).unwrap().get(y as usize).unwrap());
         }
         out.push(b'\n');
