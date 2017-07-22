@@ -20,6 +20,34 @@ fn get_level_in_y(level_in: &Vec<String>, x: usize, y: usize) -> char {
     level_in.get(x).unwrap().chars().nth(LEVEL_HEIGHT as usize - y).unwrap_or_else(|| ' ')
 }
 
+fn get_closest_bt(level_in: &Vec<String>, x: usize) -> u8 {
+    let mut chosen_bt = 0;
+    let mut chosen_cost = 255;
+
+    for bt in 0...15 {
+        let mut cost = 0;
+
+        for y in 1..LEVEL_HEIGHT {
+            let b = BT_PATTERNS.get(&bt).unwrap()[LEVEL_HEIGHT as usize - y as usize];
+            let c = get_level_in_y(&level_in, x, y as usize);
+
+            if c == ' ' && b == b'=' {
+                cost = 255;
+                break;
+            } else if c == '=' && b == b' ' {
+                cost += 1;
+            }
+        }
+
+        if cost < chosen_cost {
+            chosen_bt = bt;
+            chosen_cost = cost;
+        }
+    }
+
+    chosen_bt
+}
+
 impl SmbLevel {
     pub fn new() -> SmbLevel {
         SmbLevel { style: 0 }
@@ -55,8 +83,7 @@ impl SmbLevel {
                     '0' => (0x40, 0, &mut level_objects),
                     'I' => (0x10, 0, &mut level_objects),
                     'p' => (0x70, 0, &mut level_objects),
-                    'h' => (12 - y as u8, 12, &mut level_objects),
-                    'U' => (y as u8 + 0x40, 15, &mut level_objects),
+                    'U' => (y as u8 + 0x40 - 2, 15, &mut level_objects),
                     'F' => (0x41, 13, &mut level_objects),
                     '^' => (0x26, 15, &mut level_objects),
 
@@ -73,15 +100,13 @@ impl SmbLevel {
             }
 
             // Block type
-            let bt = 0;//get_closest_bt(level_in, x);
+            let bt = get_closest_bt(&level_in, x);
             {
                 let objs = level_objects.entry(x).or_insert(vec![]);
 
                 for y in 2..LEVEL_HEIGHT {
                     let b = BT_PATTERNS.get(&bt).unwrap()[LEVEL_HEIGHT as usize - y as usize];
                     let c = get_level_in_y(&level_in, x, y as usize);
-
-                    println!("{}, {}", b as char, c);
 
                     if c == '=' && b == b' ' {
                         // If this block type does not have enough blocks to fill
