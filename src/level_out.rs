@@ -586,7 +586,7 @@ fn put_enemy_data(level_objects: &[u8], level: &mut Vec<Vec<u8>>) {
     }
 }
 
-fn output_level(index: usize, out: &mut Vec<u8>) {
+fn output_level(index: usize, out: &mut Vec<u8>, output_header: bool) {
     let mut level: Vec<Vec<u8>> = vec![];
 
     {
@@ -597,10 +597,12 @@ fn output_level(index: usize, out: &mut Vec<u8>) {
         }
         let level_objects = &LEVELS[bt_idx..];
 
-        out.push(format!("{:X}", 1).chars().next().unwrap() as u8);
-        out.push(format!("{:X}", (level_objects[1]&0b11000000)>>6).chars().next().unwrap() as u8);
-        out.push(format!("{:X}", (level_objects[1]&0b00110000)>>4).chars().next().unwrap() as u8);
-        out.push(b'\n');
+        if output_header {
+            out.push(format!("{:X}", 1).chars().next().unwrap() as u8);
+            out.push(format!("{:X}", (level_objects[1]&0b11000000)>>6).chars().next().unwrap() as u8);
+            out.push(format!("{:X}", (level_objects[1]&0b00110000)>>4).chars().next().unwrap() as u8);
+            out.push(b'\n');
+        }
 
         put_level_data(&level_objects, &mut level);
     }
@@ -627,9 +629,10 @@ fn output_level(index: usize, out: &mut Vec<u8>) {
 fn main() {
     let mut out = vec![];
 
-    for i in 0...0 {//18 {
-        output_level(i, &mut out);
-    }
+    output_level(0, &mut out, true);
+//    for i in 0...18 {
+//        output_level(0, &mut out, false);
+//    }
 
     write_bytes_to_file(format!("assets/0.level"), out.as_slice());
 }
