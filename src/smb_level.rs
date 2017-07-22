@@ -17,7 +17,7 @@ pub struct SmbLevel {
 }
 
 fn get_level_in_y(level_in: &Vec<String>, x: usize, y: usize) -> char {
-    level_in.get(x).unwrap().chars().nth(level_in[0].len()-y).unwrap_or_else(|| ' ')
+    level_in.get(x).unwrap().chars().nth(LEVEL_HEIGHT as usize - y).unwrap_or_else(|| ' ')
 }
 
 impl SmbLevel {
@@ -40,7 +40,7 @@ impl SmbLevel {
         let ground = u8::from_str_radix(&first_line.chars().nth(2).unwrap().to_string(), 16).unwrap();
 
         for x in 0..level_in.len() {
-            for y in 0..level_in[0].len() {
+            for y in 0..LEVEL_HEIGHT as usize {
                 let c = get_level_in_y(&level_in, x, y);
 
                 let (number, y_restrict, map) = match c {
@@ -75,20 +75,22 @@ impl SmbLevel {
             // Block type
             let bt = 0;//get_closest_bt(level_in, x);
             {
-//                let objs = level_objects.entry(x).or_insert(vec![]);
+                let objs = level_objects.entry(x).or_insert(vec![]);
 
-//                for y in 1..LEVEL_HEIGHT {
-//                    let b = BT_PATTERNS.get(&bt).unwrap()[y as usize];
-//                    let c = get_level_in_y(&level_in, x, y as usize);
-//
-//                    if c == '=' && b == b' ' {
-//                        // If this block type does not have enough blocks to fill
-//                        // the level, add some bricks
-//                        objs.push((y as u8, 0x30));
-//                    }
-//                }
+                for y in 2..LEVEL_HEIGHT {
+                    let b = BT_PATTERNS.get(&bt).unwrap()[LEVEL_HEIGHT as usize - y as usize];
+                    let c = get_level_in_y(&level_in, x, y as usize);
 
-//                objs.sort_by(|&(ref a, _),&(ref b, _)| a.cmp(b));
+                    println!("{}, {}", b as char, c);
+
+                    if c == '=' && b == b' ' {
+                        // If this block type does not have enough blocks to fill
+                        // the level, add some bricks
+                        objs.push((y as u8 - 2, 0x20));
+                    }
+                }
+
+                objs.sort_by(|&(ref a, _),&(ref b, _)| a.cmp(b));
             }
 
             if x >= 1 && bt != last_bt {
@@ -170,6 +172,7 @@ impl SmbLevel {
             *slice = new_slice;
         }
 
+        if xs.len() == 0 { return; }
         { let i = xs.len()-1; xs.remove(i); }
 
         for x in xs {
@@ -188,6 +191,7 @@ impl SmbLevel {
 
                 let mut count = 1;
                 loop {
+                    if count > 14 { break; }
                     let next = SmbLevel::get(level, x+count,y);
                     if next.is_none() { break; }
                     let next_idx = next.unwrap();
