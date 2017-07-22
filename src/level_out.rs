@@ -457,6 +457,11 @@ fn put_level_data(level_objects: &[u8], level: &mut Vec<Vec<u8>>) {
             p_x += 1;
         }
 
+        if y == 13 && n < 0x3F {
+            p_x = n as usize;
+            continue;
+        }
+
         // Make sure that everything up until this point has the correct bt
         extend_level_to(level, x as usize + p_x*16, bt);
 
@@ -576,10 +581,18 @@ fn put_enemy_data(level_objects: &[u8], level: &mut Vec<Vec<u8>>) {
             }
         } else if n >= 0x39 && n <= 0x3A {
             for i in 0...(n-0x39+1) {
-                put(level, x as usize + i as usize, p_x, map_y(7), b'g', 255);
+                put(level, x as usize + i as usize, p_x, map_y(6), b'g', 255);
             }
         } else if n == 0x00 {
             put(level, x as usize, p_x, map_y(y), b'k', 255);
+        } else if n >= 0x3b && n <= 0x3c {
+            for i in 0...(n-0x3b+1) {
+                put(level, x as usize + i as usize, p_x, map_y(10), b'k', 255);
+            }
+        } else if n >= 0x3d && n <= 0x3e {
+            for i in 0...(n-0x3d+1) {
+                put(level, x as usize + i as usize, p_x, map_y(6), b'k', 255);
+            }
         } else {
             println!("Unrecognized Enemy: {}, {}, {}, {:X}", x, y+1, p, n);
         }
@@ -629,10 +642,10 @@ fn output_level(index: usize, out: &mut Vec<u8>, output_header: bool) {
 fn main() {
     let mut out = vec![];
 
-    output_level(0, &mut out, true);
-//    for i in 0...18 {
-//        output_level(0, &mut out, false);
-//    }
+//    output_level(6, &mut out, true);
+    for i in 0...18 {
+        output_level(i, &mut out, false);
+    }
 
     write_bytes_to_file(format!("assets/0.level"), out.as_slice());
 }

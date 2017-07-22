@@ -266,7 +266,9 @@ impl SmbLevel {
                         paginated.push(0b00001111);
                         paginated.push(last_page as u8);
                     } else {
-                        println!("Warning! Non-enemy array has page skip!");
+                        last_page = x/16;
+                        paginated.push(13);
+                        paginated.push(last_page as u8);
                     }
                 }
 
