@@ -2,31 +2,13 @@
 #![feature(plugin)]
 #![plugin(phf_macros)]
 extern crate phf;
-use phf::Map;
 
 mod ines;
 use ines::write_bytes_to_file;
 
-pub const BT_PATTERNS: Map<u8, [u8; LEVEL_HEIGHT as usize]> = phf_map!{
-    0u8 => [b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' '],
-    1u8 => [b'=',b'=',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' '],
-    2u8 => [b'=',b'=',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b'=',b' '],
-    3u8 => [b'=',b'=',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b'=',b'=',b'=',b' '],
-    4u8 => [b'=',b'=',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b'=',b'=',b'=',b'=',b' '],
-    5u8 => [b'=',b'=',b' ',b' ',b' ',b'=',b'=',b'=',b'=',b'=',b'=',b'=',b'=',b' '],
-    6u8 => [b'=',b'=',b'=',b'=',b'=',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b'=',b' '],
-    7u8 => [b'=',b'=',b'=',b'=',b'=',b' ',b' ',b' ',b' ',b' ',b'=',b'=',b'=',b' '],
-    8u8 => [b'=',b'=',b'=',b'=',b'=',b' ',b' ',b' ',b' ',b'=',b'=',b'=',b'=',b' '],
-    9u8 => [b'=',b'=',b'=',b'=',b'=',b'=',b' ',b' ',b' ',b' ',b' ',b' ',b'=',b' '],
-    10u8 => [b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b'=',b' '],
-    11u8 => [b'=',b'=',b'=',b'=',b'=',b'=',b' ',b' ',b' ',b'=',b'=',b'=',b'=',b' '],
-    12u8 => [b'=',b'=',b'=',b'=',b'=',b'=',b'=',b'=',b'=',b' ',b' ',b' ',b'=',b' '],
-    13u8 => [b'=',b'=',b' ',b' ',b' ',b'=',b'=',b'=',b'=',b'=',b' ',b' ',b'=',b' '],
-    14u8 => [b'=',b'=',b' ',b' ',b' ',b'=',b'=',b'=',b'=',b' ',b' ',b' ',b'=',b' '],
-    15u8 => [b'=',b'=',b'=',b'=',b'=',b'=',b'=',b'=',b'=',b'=',b'=',b'=',b'=',b' '],
-};
+mod level_consts;
+use level_consts::*;
 
-const LEVEL_HEIGHT: u8 = 14;
 const LEVELS: [u8; 1872] = [
     //level 1-1,
     0x50, 0x21,

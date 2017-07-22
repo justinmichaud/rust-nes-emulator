@@ -2,6 +2,7 @@ use nes::*;
 use ines::lines_from_file;
 use std::collections::HashMap;
 use phf::Map;
+use level_consts::*;
 
 const GROUPABLE: Map<u8, (u8, u8)> = phf_map!{
     0x20u8 => (0x20, 0x50),
@@ -15,15 +16,17 @@ pub struct SmbLevel {
     style: u8,
 }
 
+fn get_level_in_y(level_in: &Vec<String>, x: usize, y: usize) -> char {
+    level_in.get(x).unwrap().chars().nth(level_in[0].len()-y).unwrap_or_else(|| ' ')
+}
+
 impl SmbLevel {
     pub fn new() -> SmbLevel {
         SmbLevel { style: 0 }
     }
 
     // The game only allows three blocks in the same y position, and uses complex grouping
-    // of spaces and block types to get around this. Instead, here we will record the position
-    // of objects, with the last line of the level representing the block type
-    // This is not optimal, but will hopefully be good enough
+    // of spaces and block types to get around this. We will try our best
     fn raw_level() -> (HashMap<usize, Vec<(u8, u8)>>, HashMap<usize, Vec<(u8, u8)>>, u8, u8, u8, u8) {
         let mut start_bt = 0;
         let mut last_bt = 0;
@@ -37,8 +40,8 @@ impl SmbLevel {
         let ground = u8::from_str_radix(&first_line.chars().nth(2).unwrap().to_string(), 16).unwrap();
 
         for x in 0..level_in.len() {
-            for y in 0..level_in[0].len()-1 {
-                let c = level_in.get(x).unwrap().chars().nth(level_in[0].len()-y-1).unwrap_or_else(|| ' ');
+            for y in 0..level_in[0].len() {
+                let c = get_level_in_y(&level_in, x, y);
 
                 let (number, y_restrict, map) = match c {
                     '?' => (0x01, 0, &mut level_objects),
@@ -63,25 +66,39 @@ impl SmbLevel {
                 };
 
                 let objs = map.entry(x).or_insert(vec![]);
-                let y = if y_restrict > 1 { y_restrict } else { y };
+                let y = if y_restrict > 1 { y_restrict } else { y - 2 };
                 // Hack to work around enemy coordinates being different
                 let y = if y_restrict == 1 { y + 1 } else { y };
                 objs.push((y as u8, number));
             }
 
             // Block type
-            let c = level_in.get(x).unwrap().chars().nth(0).unwrap();
-            if c == ' ' { continue; }
-            let i = u8::from_str_radix(&c.to_string(), 16).unwrap();
+            let bt = 0;//get_closest_bt(level_in, x);
+            {
+//                let objs = level_objects.entry(x).or_insert(vec![]);
 
-            if x >= 1 && i != last_bt {
+//                for y in 1..LEVEL_HEIGHT {
+//                    let b = BT_PATTERNS.get(&bt).unwrap()[y as usize];
+//                    let c = get_level_in_y(&level_in, x, y as usize);
+//
+//                    if c == '=' && b == b' ' {
+//                        // If this block type does not have enough blocks to fill
+//                        // the level, add some bricks
+//                        objs.push((y as u8, 0x30));
+//                    }
+//                }
+
+//                objs.sort_by(|&(ref a, _),&(ref b, _)| a.cmp(b));
+            }
+
+            if x >= 1 && bt != last_bt {
                 let objs = level_objects.entry(x-1).or_insert(vec![]);
-                objs.insert(0, (14, i));
-                last_bt = i;
+                objs.insert(0, (14, bt));
+                last_bt = bt;
             }
             else if x < 1 {
-                start_bt = i;
-                last_bt = i;
+                start_bt = bt;
+                last_bt = bt;
             }
         }
 
@@ -110,6 +127,9 @@ impl SmbLevel {
 
         for x in &xs {
             let slice = level.get_mut(x).unwrap();
+            if slice.len() == 0 {
+                continue;
+            }
             let mut new_slice = vec![];
 
             let &(mut last_start_y, mut last_start_num) = slice.get(0).unwrap();
