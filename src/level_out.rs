@@ -9,7 +9,21 @@ use ines::write_bytes_to_file;
 
 pub const BT_PATTERNS: Map<u8, [u8; LEVEL_HEIGHT as usize]> = phf_map!{
     0u8 => [b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' '],
-    1u8 => [b'=',b'=',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ']
+    1u8 => [b'=',b'=',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' '],
+    2u8 => [b'=',b'=',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b'=',b' '],
+    3u8 => [b'=',b'=',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b'=',b'=',b'=',b' '],
+    4u8 => [b'=',b'=',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b'=',b'=',b'=',b'=',b' '],
+    5u8 => [b'=',b'=',b' ',b' ',b' ',b'=',b'=',b'=',b'=',b'=',b'=',b'=',b'=',b' '],
+    6u8 => [b'=',b'=',b'=',b'=',b'=',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b'=',b' '],
+    7u8 => [b'=',b'=',b'=',b'=',b'=',b' ',b' ',b' ',b' ',b' ',b'=',b'=',b'=',b' '],
+    8u8 => [b'=',b'=',b'=',b'=',b'=',b' ',b' ',b' ',b' ',b'=',b'=',b'=',b'=',b' '],
+    9u8 => [b'=',b'=',b'=',b'=',b'=',b'=',b' ',b' ',b' ',b' ',b' ',b' ',b'=',b' '],
+    10u8 => [b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b' ',b'=',b' '],
+    11u8 => [b'=',b'=',b'=',b'=',b'=',b'=',b' ',b' ',b' ',b'=',b'=',b'=',b'=',b' '],
+    12u8 => [b'=',b'=',b'=',b'=',b'=',b'=',b'=',b'=',b'=',b' ',b' ',b' ',b'=',b' '],
+    13u8 => [b'=',b'=',b' ',b' ',b' ',b'=',b'=',b'=',b'=',b'=',b' ',b' ',b'=',b' '],
+    14u8 => [b'=',b'=',b' ',b' ',b' ',b'=',b'=',b'=',b'=',b' ',b' ',b' ',b'=',b' '],
+    15u8 => [b'=',b'=',b'=',b'=',b'=',b'=',b'=',b'=',b'=',b'=',b'=',b'=',b'=',b' '],
 };
 
 const LEVEL_HEIGHT: u8 = 14;
@@ -396,15 +410,19 @@ const ENEMIES: [u8; 620] = [
     0xff,
 ];
 
-fn put(level: &mut Vec<Vec<u8>>, x: usize, p_x: usize, y: u8, c: u8, bt: u8) {
-    let x = x as usize + p_x*16;
-    let y = if y > LEVEL_HEIGHT { 0 } else { y };
-
+fn extend_level_to(level: &mut Vec<Vec<u8>>, x: usize, bt: u8) {
     while level.len() <= x {
         let mut v = Vec::new();
         for i in BT_PATTERNS.get(&bt).unwrap() { v.push(*i) };
         level.push(v);
     }
+}
+
+fn put(level: &mut Vec<Vec<u8>>, x: usize, p_x: usize, y: u8, c: u8, bt: u8) {
+    let x = x as usize + p_x*16;
+    let y = if y > LEVEL_HEIGHT { 0 } else { y };
+
+    extend_level_to(level, x, bt);
 
     *level.get_mut(x).unwrap().get_mut(y as usize).unwrap() = c;
 }
@@ -433,6 +451,9 @@ fn put_level_data(level_objects: &[u8], level: &mut Vec<Vec<u8>>) {
             p_x += 1;
         }
 
+        // Make sure that everything up until this point has the correct bt
+        extend_level_to(level, x as usize + p_x*16, bt);
+
         if y == 14 && n < 0x3F {
             bt = n;
         } else if y < 12 && n >= 0x20 && n <= 0x2F {
@@ -445,7 +466,7 @@ fn put_level_data(level_objects: &[u8], level: &mut Vec<Vec<u8>>) {
             }
         } else if y < 12 && n >= 0x50 && n <= 0x5F {
             for i in 0...(n-0x50) {
-                put(level, x as usize, p_x, map_y(y)+i, b'b', bt);
+                put(level, x as usize, p_x, map_y(y+i), b'b', bt);
             }
         } else if y < 12 && n >= 0x30 && n <= 0x3F {
             for i in 0...(n-0x30) {
@@ -508,8 +529,6 @@ fn put_level_data(level_objects: &[u8], level: &mut Vec<Vec<u8>>) {
             put(level, x as usize, p_x, map_y(y), b' ', bt);
         } else {
             println!("Unrecognized level tile: {}, {}, {}, {:X}", x, y, p, n);
-            let y = if y >= 12 { 0 } else { y };
-            put(level, x as usize, p_x, map_y(y), b' ', bt);
         }
     }
 }
@@ -602,7 +621,7 @@ fn output_level(index: usize, out: &mut Vec<u8>) {
 fn main() {
     let mut out = vec![];
 
-    for i in 0..1 {//18 {
+    for i in 0...0 {//18 {
         output_level(i, &mut out);
     }
 
