@@ -412,8 +412,9 @@ const ENEMIES: [u8; 620] = [
 
 fn extend_level_to(level: &mut Vec<Vec<u8>>, x: usize, bt: u8) {
     while level.len() <= x {
+        assert_ne!(bt, 255, "Enemy has no block type data to extend the level");
         let mut v = Vec::new();
-        for i in BT_PATTERNS.get(&bt).unwrap() { v.push(*i) };
+        for i in BT_PATTERNS.get(&(bt&0xF)).unwrap() { v.push(*i) };
         level.push(v);
     }
 }
