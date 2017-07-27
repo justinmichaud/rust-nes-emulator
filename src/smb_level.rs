@@ -101,6 +101,11 @@ impl SmbLevel {
                     'U' => (y as u8 + 0x40 - 2, 15, &mut level_objects),
                     'F' => (0x41, 13, &mut level_objects),
                     'A' => (0x26, 15, &mut level_objects),
+                    '|' => (match y {
+                        7 => 0x20,
+                        8 => 0x30,
+                        _ => 0x40
+                    }, 12, &mut level_objects),
 
                     'k' => (0x03, 1, &mut enemy_objects),
                     'g' => (0x06, 1, &mut enemy_objects),
@@ -238,7 +243,7 @@ impl SmbLevel {
 
                 let mut count = 1;
                 loop {
-                    if count > 14 { break; }
+                    if count > 16 { break; }
                     let next = SmbLevel::get(level, x+count,y);
                     if next.is_none() { break; }
                     let next_idx = next.unwrap();
