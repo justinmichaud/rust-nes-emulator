@@ -4,20 +4,34 @@ use std::collections::HashMap;
 use phf::Map;
 use level_consts::*;
 
+const NO_GROUP: u8 = 0xFF;
+
 const GROUPABLE: Map<u8, (u8, u8)> = phf_map!{
     0x20u8 => (0x20, 0x50),
     0x30u8 => (0x30, 0x60),
-    0x40u8 => (0x40, 0xFF),
-    0x70u8 => (0xFF, 0x70),
-    0x10u8 => (0x10, 0xFF),
+    0x40u8 => (0x40, NO_GROUP),
+    0x70u8 => (NO_GROUP, 0x70),
+    0x10u8 => (0x10, NO_GROUP),
 };
+
+// Hack to get around empty list restriction
+const GROUPABLE_ENEMY: Map<u8, (u8, u8)> = phf_map!{0xFFu8 => (NO_GROUP, NO_GROUP)};
+
+const IGNORE_HORIZONTAL_GROUP: [u8; 10] = [
+    0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79
+];
+
+const IGNORE_HORIZONTAL_GROUP_ENEMY: [u8; 2] = [
+    0x25,
+    0x28,
+];
 
 pub struct SmbLevel {
     style: u8,
 }
 
 fn get_level_in_y(level_in: &Vec<String>, x: usize, y: usize) -> char {
-    level_in.get(x).unwrap().chars().nth(LEVEL_HEIGHT as usize - y).unwrap_or_else(|| ' ')
+    level_in.get(x).unwrap().chars().nth(LEVEL_HEIGHT as usize - y).unwrap_or_else(|| '.')
 }
 
 fn get_closest_bt(level_in: &Vec<String>, x: usize) -> u8 {
@@ -31,10 +45,10 @@ fn get_closest_bt(level_in: &Vec<String>, x: usize) -> u8 {
             let b = BT_PATTERNS.get(&bt).unwrap()[LEVEL_HEIGHT as usize - y as usize];
             let c = get_level_in_y(&level_in, x, y as usize);
 
-            if c == ' ' && b == b'=' {
+            if c == '.' && b == b'=' {
                 cost = 255;
                 break;
-            } else if c == '=' && b == b' ' {
+            } else if c == '=' && b == b'.' {
                 cost += 1;
             }
         }
@@ -79,16 +93,21 @@ impl SmbLevel {
                     'C' => (0x07, 0, &mut level_objects),
                     'u' => (0x08, 0, &mut level_objects),
                     'b' => (0x20, 0, &mut level_objects),
-                    '.' => (0x30, 0, &mut level_objects),
+                    '-' => (0x30, 0, &mut level_objects),
                     '0' => (0x40, 0, &mut level_objects),
                     'I' => (0x10, 0, &mut level_objects),
                     'p' => (0x70, 0, &mut level_objects),
+                    'x' => (0x0B, 0, &mut level_objects),
                     'U' => (y as u8 + 0x40 - 2, 15, &mut level_objects),
                     'F' => (0x41, 13, &mut level_objects),
-                    '^' => (0x26, 15, &mut level_objects),
+                    'A' => (0x26, 15, &mut level_objects),
 
-                    'k' => (0x00, 1, &mut enemy_objects),
+                    'k' => (0x03, 1, &mut enemy_objects),
                     'g' => (0x06, 1, &mut enemy_objects),
+                    'H' => (0x05, 1, &mut enemy_objects),
+                    'K' => (0x0F, 1, &mut enemy_objects),
+                    '<' => (0x25, 1, &mut enemy_objects),
+                    '^' => (0x28, 1, &mut enemy_objects),
                     _ => continue
                 };
 
@@ -108,7 +127,7 @@ impl SmbLevel {
                     let b = BT_PATTERNS.get(&bt).unwrap()[LEVEL_HEIGHT as usize - y as usize];
                     let c = get_level_in_y(&level_in, x, y as usize);
 
-                    if c == '=' && b == b' ' {
+                    if c == '=' && b == b'.' {
                         // If this block type does not have enough blocks to fill
                         // the level, add some bricks
                         objs.push((y as u8 - 2, 0x20));
@@ -148,7 +167,8 @@ impl SmbLevel {
         None
     }
 
-    fn combine_objects(level: &mut HashMap<usize, Vec<(u8, u8)>>) {
+    fn combine_objects(level: &mut HashMap<usize, Vec<(u8, u8)>>, groupable: &Map<u8, (u8, u8)>,
+                       ignore_horizontal_group: &[u8]) {
         let mut xs: Vec<usize> = level.keys().map(|x| x.clone()).collect();
         xs.sort();
 
@@ -169,9 +189,9 @@ impl SmbLevel {
                         && count<=16 {
                     count += 1;
                 } else {
-                    if count >1 && GROUPABLE.get(&last_start_num).is_some()
-                            && GROUPABLE.get(&last_start_num).unwrap().1 != 0xFF {
-                        let number = GROUPABLE.get(&last_start_num).unwrap().1 + count - 1;
+                    if count >1 && groupable.get(&last_start_num).is_some()
+                            && groupable.get(&last_start_num).unwrap().1 != NO_GROUP {
+                        let number = groupable.get(&last_start_num).unwrap().1 + count - 1;
                         new_slice.push((last_start_y, number));
                     } else {
                         for i in 0..count {
@@ -184,9 +204,9 @@ impl SmbLevel {
                 }
             }
 
-            if count >1 && GROUPABLE.get(&last_start_num).is_some()
-                && GROUPABLE.get(&last_start_num).unwrap().1 != 0xFF {
-                let number = GROUPABLE.get(&last_start_num).unwrap().1 + count - 1;
+            if count >1 && groupable.get(&last_start_num).is_some()
+                && groupable.get(&last_start_num).unwrap().1 != 0xFF {
+                let number = groupable.get(&last_start_num).unwrap().1 + count - 1;
                 new_slice.push((last_start_y, number));
             } else {
                 for i in 0..count {
@@ -209,8 +229,10 @@ impl SmbLevel {
 
             for i in 0..slice.len() {
                 let &(y, number) = slice.get(i).unwrap();
-                if GROUPABLE.get(&number).is_none()
-                    || GROUPABLE.get(&number).unwrap().0 == 0xFF {
+                let ignore_group = ignore_horizontal_group.contains(&number);
+
+                if !ignore_group && (groupable.get(&number).is_none()
+                    || groupable.get(&number).unwrap().0 == NO_GROUP) {
                     continue;
                 }
 
@@ -231,7 +253,7 @@ impl SmbLevel {
                 }
                 if count == 1 { continue; }
 
-                let number = GROUPABLE.get(&number).unwrap().0 + count as u8 - 1;
+                let number = if ignore_group { number } else { groupable.get(&number).unwrap().0 + count as u8 - 1 };
                 *level.get_mut(&x).unwrap().get_mut(i).unwrap() = (y, number);
             }
 
@@ -283,10 +305,11 @@ impl SmbLevel {
     pub fn load(&mut self, chipset: &mut Chipset) {
         chipset.write(0x8000 - 16 + 0x1CCC, 0x25); // Set area
 
-        let (mut level_objects, enemy_objects, bt, style, scenery, ground) = SmbLevel::raw_level();
+        let (mut level_objects, mut enemy_objects, bt, style, scenery, ground) = SmbLevel::raw_level();
         self.style = style;
 
-        SmbLevel::combine_objects(&mut level_objects);
+        SmbLevel::combine_objects(&mut level_objects, &GROUPABLE, &IGNORE_HORIZONTAL_GROUP);
+        SmbLevel::combine_objects(&mut enemy_objects, &GROUPABLE_ENEMY, &IGNORE_HORIZONTAL_GROUP_ENEMY);
 
         let mut level_objects = SmbLevel::paginate(level_objects, false);
         let mut enemy_objects = SmbLevel::paginate(enemy_objects, true);

@@ -9,7 +9,7 @@ use ines::write_bytes_to_file;
 mod level_consts;
 use level_consts::*;
 
-const LEVELS: [u8; 2035] = [
+const LEVELS: [u8; 1872] = [
     //level 1-1,
     0x50, 0x21,
     0x07, 0x81, 0x47, 0x24, 0x57, 0x00, 0x63, 0x01, 0x77, 0x01,
@@ -22,26 +22,6 @@ const LEVELS: [u8; 2035] = [
     0x87, 0x63, 0x9c, 0x01, 0xb7, 0x63, 0xc8, 0x62, 0xd9, 0x61,
     0xea, 0x60, 0x39, 0xf1, 0x87, 0x21, 0xa7, 0x01, 0xb7, 0x20,
     0x39, 0xf1, 0x5f, 0x38, 0x6d, 0xc1, 0xaf, 0x26,
-    0xfd,
-
-    // level 1-2,
-    0x48, 0x0f,
-    0x0e, 0x01, 0x5e, 0x02, 0xa7, 0x00, 0xbc, 0x73, 0x1a, 0xe0,
-    0x39, 0x61, 0x58, 0x62, 0x77, 0x63, 0x97, 0x63, 0xb8, 0x62,
-    0xd6, 0x07, 0xf8, 0x62, 0x19, 0xe1, 0x75, 0x52, 0x86, 0x40,
-    0x87, 0x50, 0x95, 0x52, 0x93, 0x43, 0xa5, 0x21, 0xc5, 0x52,
-    0xd6, 0x40, 0xd7, 0x20, 0xe5, 0x06, 0xe6, 0x51, 0x3e, 0x8d,
-    0x5e, 0x03, 0x67, 0x52, 0x77, 0x52, 0x7e, 0x02, 0x9e, 0x03,
-    0xa6, 0x43, 0xa7, 0x23, 0xde, 0x05, 0xfe, 0x02, 0x1e, 0x83,
-    0x33, 0x54, 0x46, 0x40, 0x47, 0x21, 0x56, 0x04, 0x5e, 0x02,
-    0x83, 0x54, 0x93, 0x52, 0x96, 0x07, 0x97, 0x50, 0xbe, 0x03,
-    0xc7, 0x23, 0xfe, 0x02, 0x0c, 0x82, 0x43, 0x45, 0x45, 0x24,
-    0x46, 0x24, 0x90, 0x08, 0x95, 0x51, 0x78, 0xfa, 0xd7, 0x73,
-    0x39, 0xf1, 0x8c, 0x01, 0xa8, 0x52, 0xb8, 0x52, 0xcc, 0x01,
-    0x5f, 0xb3, 0x97, 0x63, 0x9e, 0x00, 0x0e, 0x81, 0x16, 0x24,
-    0x66, 0x04, 0x8e, 0x00, 0xfe, 0x01, 0x08, 0xd2, 0x0e, 0x06,
-    0x6f, 0x47, 0x9e, 0x0f, 0x0e, 0x82, 0x2d, 0x47, 0x28, 0x7a,
-    0x68, 0x7a, 0xa8, 0x7a, 0xae, 0x01, 0xde, 0x0f, 0x6d, 0xc5,
     0xfd,
 
     //level 1-3/5-3,
@@ -291,14 +271,11 @@ const LEVELS: [u8; 2035] = [
     0xfd,
 ];
 
-const ENEMIES: [u8; 621] = [
+const ENEMIES: [u8; 620] = [
     //level 1-1,
     0x1e, 0xc2, 0x00, 0x6b, 0x06, 0x8b, 0x86, 0x63, 0xb7, 0x0f, 0x05,
     0x03, 0x06, 0x23, 0x06, 0x4b, 0xb7, 0xbb, 0x00, 0x5b, 0xb7,
     0xfb, 0x37, 0x3b, 0xb7, 0x0f, 0x0b, 0x1b, 0x37,
-    0xff,
-
-    //level 1-2
     0xff,
 
     //level 1-3/5-3,
@@ -428,9 +405,25 @@ fn put(level: &mut Vec<Vec<u8>>, x: usize, p_x: usize, y: u8, c: u8, bt: u8) {
     let x = x as usize + p_x*16;
     let y = if y > LEVEL_HEIGHT { 0 } else { y };
 
+    let old = get(level, x, y);
+    if old != b'.' && old != c && bt == 255 {
+        println!("Warning: Skipping {},{} = '{}' since it already has a block '{}'", x, y, c as char, old as char);
+        return;
+    };
+
     extend_level_to(level, x, bt);
 
     *level.get_mut(x).unwrap().get_mut(y as usize).unwrap() = c;
+}
+
+fn get(level: &mut Vec<Vec<u8>>, x: usize, y: u8) -> u8 {
+    let column = level.get_mut(x);
+    if column.is_none() { return b'.' };
+
+    let val = column.unwrap().get(y as usize);
+    if val.is_none() { return b'.' };
+
+    *val.unwrap()
 }
 
 fn map_y(y: u8) -> u8 {
@@ -481,19 +474,21 @@ fn put_level_data(level_objects: &[u8], level: &mut Vec<Vec<u8>>) {
             }
         } else if y < 12 && n >= 0x30 && n <= 0x3F {
             for i in 0...(n-0x30) {
-                put(level, x as usize + i as usize, p_x, map_y(y), b'.', bt);
+                put(level, x as usize + i as usize, p_x, map_y(y), b'-', bt);
             }
         } else if y < 12 && n >= 0x70 && n <= 0x77 {
             for i in 0...(n-0x70) {
                 put(level, x as usize, p_x, map_y(y+i), b'p', bt);
+                put(level, x as usize + 1, p_x, map_y(y+i), b'p', bt);
             }
         } else if y < 12 && n >= 0x78 && n <= 0x7F {
             for i in 0...(n-0x78) {
                 put(level, x as usize, p_x, map_y(y+i), b'p', bt);
+                put(level, x as usize + 1, p_x, map_y(y+i), b'p', bt);
             }
         } else if y < 12 && n >= 0x60 && n <= 0x6F {
             for i in 0...(n-0x60) {
-                put(level, x as usize, p_x, map_y(y+i), b'.', bt);
+                put(level, x as usize, p_x, map_y(y+i), b'-', bt);
             }
         } else if y == 12 && n >= 0x60 && n <= 0x6F {
             for i in 0...(n-0x60) {
@@ -508,17 +503,17 @@ fn put_level_data(level_objects: &[u8], level: &mut Vec<Vec<u8>>) {
         } else if y == 15 && n >= 0x30 && n <= 0x3F {
             for i in 0...(n-0x30) {
                 for j in 0...i {
-                    put(level, x as usize + i as usize, p_x, map_y(10-j), b'.', bt);
+                    put(level, x as usize + i as usize, p_x, map_y(10-j), b'-', bt);
                 }
             }
         } else if y == 15 && n >= 0x40 && n <= 0x4F {
             put(level, x as usize as usize, p_x, map_y(n-0x40), b'U', bt);
         } else if y == 15 && n >= 0x20 && n <= 0x2A {
-            put(level, x as usize as usize, p_x, 2, b'^', bt);
+            put(level, x as usize as usize, p_x, 2, b'A', bt);
         } else if y == 12 && n <= 0x0F {
             for i in 0...n {
-                put(level, x as usize + i as usize, p_x, 0, b' ', bt);
-                put(level, x as usize + i as usize, p_x, 1, b' ', bt);
+                put(level, x as usize + i as usize, p_x, 0, b'.', bt);
+                put(level, x as usize + i as usize, p_x, 1, b'.', bt);
             }
         } else if y < 12 && n >= 0x40 && n <= 0x4F {
             for i in 0...(n-0x40) {
@@ -529,15 +524,19 @@ fn put_level_data(level_objects: &[u8], level: &mut Vec<Vec<u8>>) {
         } else if y < 12 && n == 1 {
             put(level, x as usize, p_x, map_y(y), b'?', bt);
         } else if y < 12 && n == 4 {
-            put(level, x as usize, p_x, map_y(y), b'M', bt);
+            put(level, x as usize, p_x, map_y(y), b'b', bt);
         } else if y < 12 && n == 6 {
-            put(level, x as usize, p_x, map_y(y), b'S', bt);
+            put(level, x as usize, p_x, map_y(y), b'b', bt);
         } else if y < 12 && n == 7 {
-            put(level, x as usize, p_x, map_y(y), b'C', bt);
+            put(level, x as usize, p_x, map_y(y), b'b', bt);
         } else if y < 12 && n == 8 {
-            put(level, x as usize, p_x, map_y(y), b'u', bt);
+            put(level, x as usize, p_x, map_y(y), b'b', bt);
+        } else if y < 12 && n == 5 {
+            put(level, x as usize, p_x, map_y(y), b'b', bt);
         } else if y < 12 && n == 0x0f {
-            put(level, x as usize, p_x, map_y(y), b' ', bt);
+            put(level, x as usize, p_x, map_y(y), b'.', bt);
+        } else if y < 12 && n == 0x0B {
+            put(level, x as usize, p_x, map_y(y), b'x', bt);
         } else {
             println!("Unrecognized level tile: {}, {}, {}, {:X}", x, y, p, n);
         }
@@ -583,7 +582,7 @@ fn put_enemy_data(level_objects: &[u8], level: &mut Vec<Vec<u8>>) {
             for i in 0...(n-0x39+1) {
                 put(level, x as usize + i as usize, p_x, map_y(6), b'g', 255);
             }
-        } else if n == 0x00 {
+        } else if n == 0x00 || n == 0x01 || n == 0x03 || n == 0x04 || n == 0x0E {
             put(level, x as usize, p_x, map_y(y), b'k', 255);
         } else if n >= 0x3b && n <= 0x3c {
             for i in 0...(n-0x3b+1) {
@@ -592,6 +591,18 @@ fn put_enemy_data(level_objects: &[u8], level: &mut Vec<Vec<u8>>) {
         } else if n >= 0x3d && n <= 0x3e {
             for i in 0...(n-0x3d+1) {
                 put(level, x as usize + i as usize, p_x, map_y(6), b'k', 255);
+            }
+        } else if n == 0x05 {
+            put(level, x as usize, p_x, map_y(y), b'H', 255);
+        } else if n == 0x0F {
+            put(level, x as usize, p_x, map_y(y), b'K', 255);
+        } else if n == 0x25 {
+            for i in 0..4 {
+                put(level, x as usize + i, p_x, map_y(y), b'<', 255);
+            }
+        } else if n == 0x28 {
+            for i in 0..4 {
+                put(level, x as usize + i, p_x, map_y(y), b'^', 255);
             }
         } else {
             println!("Unrecognized Enemy: {}, {}, {}, {:X}", x, y+1, p, n);
@@ -642,10 +653,10 @@ fn output_level(index: usize, out: &mut Vec<u8>, output_header: bool) {
 fn main() {
     let mut out = vec![];
 
-//    output_level(6, &mut out, true);
-    for i in 0...18 {
-        output_level(i, &mut out, false);
-    }
+    output_level(2, &mut out, true);
+//    for i in 0...18 {
+//        output_level(i, &mut out, false);
+//    }
 
     write_bytes_to_file(format!("assets/0.level"), out.as_slice());
 }
