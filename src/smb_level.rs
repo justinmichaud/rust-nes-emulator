@@ -17,13 +17,14 @@ const GROUPABLE: Map<u8, (u8, u8)> = phf_map!{
 // Hack to get around empty list restriction
 const GROUPABLE_ENEMY: Map<u8, (u8, u8)> = phf_map!{0xFFu8 => (NO_GROUP, NO_GROUP)};
 
-const IGNORE_HORIZONTAL_GROUP: [u8; 10] = [
+const IGNORE_HORIZONTAL_GROUP: &'static[u8] = &[
     0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79
 ];
 
-const IGNORE_HORIZONTAL_GROUP_ENEMY: [u8; 2] = [
+const IGNORE_HORIZONTAL_GROUP_ENEMY: &'static[u8] = &[
     0x25,
     0x28,
+    0x24,
 ];
 
 pub struct SmbLevel {
@@ -106,6 +107,26 @@ impl SmbLevel {
                         8 => 0x30,
                         _ => 0x40
                     }, 12, &mut level_objects),
+                    '_' => {
+                        for i in y..LEVEL_HEIGHT as usize {
+                            if get_level_in_y(&level_in, x, i) == '_' {
+                                continue;
+                            }
+                        }
+
+                        let mut count_y = 0;
+                        for i in 0..y {
+                            if get_level_in_y(&level_in, x, i) == '_' {
+                                count_y += 1;
+                            }
+                        }
+
+                        if count_y > 0 {
+                            (0x10 + count_y, 15, &mut level_objects)
+                        } else {
+                            (0x10, 12, &mut level_objects)
+                        }
+                    },
 
                     'k' => (0x03, 1, &mut enemy_objects),
                     'g' => (0x06, 1, &mut enemy_objects),
@@ -113,6 +134,7 @@ impl SmbLevel {
                     'K' => (0x0F, 1, &mut enemy_objects),
                     '<' => (0x25, 1, &mut enemy_objects),
                     '^' => (0x28, 1, &mut enemy_objects),
+                    'v' => (0x24, 1, &mut enemy_objects),
                     _ => continue
                 };
 
