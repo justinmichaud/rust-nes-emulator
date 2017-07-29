@@ -25,6 +25,7 @@ const IGNORE_HORIZONTAL_GROUP: &'static[u8] = &[
 const IGNORE_HORIZONTAL_GROUP_ENEMY: &'static[u8] = &[
     0x25,
     0x28,
+    0x29,
     0x24,
 ];
 
@@ -137,6 +138,7 @@ impl SmbLevel {
                     'H' => (0x05, 1, &mut enemy_objects),
                     'K' => (0x0F, 1, &mut enemy_objects),
                     '<' => (0x25, 1, &mut enemy_objects),
+                    '>' => (0x29, 1, &mut enemy_objects),
                     '^' => (0x28, 1, &mut enemy_objects),
                     'v' => (0x24, 1, &mut enemy_objects),
                     _ => continue
@@ -217,7 +219,7 @@ impl SmbLevel {
                 let &(y, number) = slice.get(i).unwrap();
 
                 if last_start_num == number && y == last_start_y+count
-                        && count<=16 {
+                        && count<15 {
                     count += 1;
                 } else {
                     if count >1 && groupable.get(&last_start_num).is_some()
@@ -269,7 +271,7 @@ impl SmbLevel {
 
                 let mut count = 1;
                 loop {
-                    if count > 16 { break; }
+                    if count >= 16 { break; }
                     let next = SmbLevel::get(level, x+count,y);
                     if next.is_none() { break; }
                     let next_idx = next.unwrap();
