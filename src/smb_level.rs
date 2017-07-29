@@ -12,6 +12,7 @@ const GROUPABLE: Map<u8, (u8, u8)> = phf_map!{
     0x40u8 => (0x40, NO_GROUP),
     0x70u8 => (NO_GROUP, 0x70),
     0x10u8 => (0x10, NO_GROUP),
+    0x11u8 => (0x12, NO_GROUP), // Hack for horizontal rope
 };
 
 // Hack to get around empty list restriction
@@ -83,6 +84,7 @@ impl SmbLevel {
         let ground = u8::from_str_radix(&first_line.chars().nth(2).unwrap().to_string(), 16).unwrap();
 
         for x in 0..level_in.len() {
+            'outer:
             for y in 0..LEVEL_HEIGHT as usize {
                 let c = get_level_in_y(&level_in, x, y);
 
@@ -108,9 +110,9 @@ impl SmbLevel {
                         _ => 0x40
                     }, 12, &mut level_objects),
                     '_' => {
-                        for i in y..LEVEL_HEIGHT as usize {
+                        for i in y+1..LEVEL_HEIGHT as usize {
                             if get_level_in_y(&level_in, x, i) == '_' {
-                                continue;
+                                continue 'outer;
                             }
                         }
 
@@ -124,7 +126,9 @@ impl SmbLevel {
                         if count_y > 0 {
                             (0x10 + count_y, 15, &mut level_objects)
                         } else {
-                            (0x10, 12, &mut level_objects)
+                            // Hack to fix horizontal rope
+                            level_objects.entry(x-1).or_insert(vec![]).push((12, 0x11));
+                            continue;
                         }
                     },
 
