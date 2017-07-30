@@ -132,6 +132,7 @@ impl SmbLevel {
                             continue;
                         }
                     },
+                    '8' => (0x11, 0, &mut level_objects),
 
                     'k' => (0x03, 1, &mut enemy_objects),
                     'g' => (0x06, 1, &mut enemy_objects),
@@ -363,6 +364,7 @@ impl SmbLevel {
     }
 
     pub fn persist(&mut self, chipset: &mut Chipset) {
+        chipset.write(0x8000 - 16 + 0x1CCC + 32, 0x25); // Set area
         chipset.write(0x074e, self.style); // Set area type
     }
 }
