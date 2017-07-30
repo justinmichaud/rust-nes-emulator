@@ -839,7 +839,8 @@ fn put_level_data(level_objects: &[u8], level: &mut Vec<Vec<u8>>, bullets: bool)
                 put(level, x as i32 + i as i32, p_x, map_y(0), b'_', bt);
             }
         } else {
-            println!("Unrecognized level tile: {}, {}, {}, {:X}", x, y, p, n);
+            println!("Unrecognized level tile: {}, {}, {:X} - line {} in file with header",
+                     x as usize + p_x*16, y, n, x as usize + p_x*16 + 2);
         }
     }
 }
@@ -914,7 +915,8 @@ fn put_enemy_data(level_objects: &[u8], level: &mut Vec<Vec<u8>>) {
                 put(level, x as i32 + i, p_x, map_y(y), b'v', 255);
             }
         } else {
-            println!("Unrecognized Enemy: {}, {}, {}, {:X}", x, y+1, p, n);
+            println!("Unrecognized Enemy: {}, {}, {:X} - line {} in file with header",
+                     x as usize + p_x*16, y+1, n, x as usize + p_x*16 + 2);
         }
     }
 }
