@@ -8,7 +8,9 @@ Games that don't use any fancy ppu trickery work, including Donkey Kong and Supe
 
 # Super Mario Bros level generation
 
-When given a Super Mario Bros. rom, the emulator can spit out a text file representation of the overworld levels in the game. The following level was generated using the output of emulator (overworld levels from SMB + the lost levels, repeated 20x each in random order), and torch-rnn with the default settings after 20 epochs.
+When given a Super Mario Bros. rom, the emulator can spit out a text file representation of the overworld levels in the game. The following level was generated using the output of emulator (overworld levels from SMB + the lost levels, repeated 20x each in random order), and torch-rnn with the default settings after 20 epochs. It was modified to add the begining level header and the final flag.
+
+A playable demo of the generated level is available above, or (modified to fit the game, ID AC01-0000-034E-BC93) on Super Mario Maker.
 
 ![](/0.png?raw=true)
 
