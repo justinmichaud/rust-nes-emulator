@@ -6,6 +6,12 @@ Games that don't use any fancy ppu trickery work, including Donkey Kong and Supe
 
 ![Super Mario Bros](/smb.gif?raw=true "Super Mario Bros")
 
+# Super Mario Bros level generation
+
+When given a Super Mario Bros. rom, the emulator can spit out a text file representation of the overworld levels in the game. The following level was generated using the output of emulator (overworld levels from SMB + the lost levels, repeated 20x each in random order), and torch-rnn with the default settings after 20 epochs.
+
+![](/0.png?raw=true)
+
 # Super Mario Bros Hacks
 
 If USE_HACKS in settings.rs is set to true, the title screen and prelevel screens will be automatically skipped, and you will have infinite lives.
