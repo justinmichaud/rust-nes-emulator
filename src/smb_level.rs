@@ -357,6 +357,7 @@ impl SmbLevel {
         }
 
         println!("{:?}", level_objects);
+	println!("{:?}", enemy_objects);
 
         for i in 0..enemy_objects.len() {
             chipset.write(0x8000 - 16 + 0x1F11 + i as u16, enemy_objects[i]);
