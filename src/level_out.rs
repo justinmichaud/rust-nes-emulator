@@ -975,7 +975,7 @@ fn main() {
     let seed: &[_] = &[1, 2, 3, 4];
     let mut rng: StdRng = SeedableRng::from_seed(seed);
 
-    for _ in 0..5 {
+    for _ in 0..20 {
         rng.shuffle(&mut list);
         for i in &list {
             output_level(*i, &mut out, false);
