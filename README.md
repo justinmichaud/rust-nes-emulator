@@ -12,6 +12,8 @@ Games that don't use any fancy ppu trickery work, including Donkey Kong and Supe
 
 The emulator can read levels for Super Mario Bros from a file and insert them into memory. There is also a separate project, `level_out`, that can spit out a text file representation of most of the overworld levels in the game. The following level was generated using the output of emulator (overworld levels from SMB + the lost levels, repeated 20x each in random order), and torch-rnn with the default settings after ~20 epochs (I used the 10000th checkpoint).
 
+A playable demo of the generated level is available [here](http://justinmichaud.com/ml_level/index.html), or [here](https://supermariomakerbookmark.nintendo.net/courses/AC01-0000-034E-BC93) (modified to fit Super Mario Maker restrictions).
+
 ![](/0.png?raw=true)
 
 # Other Super Mario Bros game modifications
