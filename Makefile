@@ -1,7 +1,7 @@
 buildtype = release
 
 PROJECT = rust-nes-emulator
-TARGET = wasm32-unknown-emscripten
+TARGET = asmjs-unknown-emscripten
 
 DOCS_DIR = docs
 DOCS_PORT = 8080
@@ -17,7 +17,7 @@ CARGO_OPTION = --target $(TARGET)
 EMCC_OPTION = -s USE_SDL=2
 
 ifeq ($(buildtype),release)
-CARGO_OPTION += --release
+CARGO_OPTION += --release --bin emulator
 EMCC_OPTION += -O3
 
 else ifeq ($(buildtype),debug)
@@ -29,7 +29,7 @@ else
 $(error "unknown buildtype")
 endif
 
-EMCC_OPTION += --preload-file assets
+EMCC_OPTION += --preload-file assets -s ALLOW_MEMORY_GROWTH=1
 
 all: $(DOCS_DIR)/$(JS_FILE)
 .PHONY: all
