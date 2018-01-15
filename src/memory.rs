@@ -40,9 +40,9 @@ impl Memory {
 impl Mem for Memory {
     fn read(&mut self, mapper: &mut Box<Mapper>, addr: u16) -> u8 {
         match addr {
-            0...0x07FF => self.ram[addr as usize],
-            0x0800...0x1FFF => self.read(mapper, mirror_addr(0...0x07FF, 0x0800...0x1FFF, addr)),
-            0x4020...0xFFFF => mapper.read(addr),
+            0..=0x07FF => self.ram[addr as usize],
+            0x0800..=0x1FFF => self.read(mapper, mirror_addr(0..=0x07FF, 0x0800..=0x1FFF, addr)),
+            0x4020..=0xFFFF => mapper.read(addr),
             _ => {
                 panic!("Reference to invalid main address {:X}", addr);
             }
@@ -51,9 +51,9 @@ impl Mem for Memory {
 
     fn write(&mut self, mapper: &mut Box<Mapper>, addr: u16, val: u8) {
         match addr {
-            0...0x07FF => self.ram[addr as usize] = val,
-            0x0800...0x1FFF => self.write(mapper, mirror_addr(0...0x07FF, 0x0800...0x1FFF, addr), val),
-            0x4020...0xFFFF => mapper.write(addr, val),
+            0..=0x07FF => self.ram[addr as usize] = val,
+            0x0800..=0x1FFF => self.write(mapper, mirror_addr(0..=0x07FF, 0x0800..=0x1FFF, addr), val),
+            0x4020..=0xFFFF => mapper.write(addr, val),
             _ => {
                 panic!("Reference to invalid main address {:X}", addr);
             }

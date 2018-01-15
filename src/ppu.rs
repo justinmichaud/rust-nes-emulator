@@ -314,7 +314,7 @@ impl Ppu {
         cpu.count += 512;
 
         let addr = ((val as u16)&0x00FF)<<8;
-        for i in 0...255 {
+        for i in 0..=255 {
             self.oam[self.oamaddr.wrapping_add(i) as usize]
                 = mem.read(mapper, addr + i as u16);
         }
@@ -409,11 +409,11 @@ impl Ppu {
         let colour_bits = ((attr&(mask)) >> (4*over_y + 2*over_x))<<2;
 
         let pattern_addr = bg_pattern as u16 + 16*pattern_number as u16;
-        for y in y_offset...(screen_y_end-screen_y_start+y_offset) {
+        for y in y_offset..=(screen_y_end-screen_y_start+y_offset) {
             let lo = self.read(mapper, pattern_addr + y);
             let hi = self.read(mapper, pattern_addr + y + 8);
 
-            for x in x_offset...(screen_x_end-screen_x_start+x_offset) {
+            for x in x_offset..=(screen_x_end-screen_x_start+x_offset) {
                 let mask = 0b00000001<<(7-x);
                 let mut palette_idx = ((lo&mask)>>(7-x)) as u16
                     + (((hi&mask)>>(7-x))<<1) as u16;
@@ -476,7 +476,7 @@ impl Ppu {
         };
 
         for screen_x in 0..33 {
-            for screen_y in (state_start_y/8)...(state_end_y/8+1) {
+            for screen_y in (state_start_y/8)..=(state_end_y/8+1) {
                 let x_nt = ((sx / 8 + screen_x + 32 * base_nt_x) % 64) / 32;
                 let y_nt = ((sy / 8 + screen_y + 30 * base_nt_y) % 60) / 30;
 
@@ -623,7 +623,7 @@ pub fn make_canvas(width: u32, height: u32) -> NesImageBuffer {
 impl Mem for Ppu {
     fn read(&mut self, mapper: &mut Box<Mapper>, addr: u16) -> u8 {
         match addr as usize {
-            0x0000...0x1FFF => {
+            0x0000..=0x1FFF => {
                 if self.enable_ppu_chr_delay {
                     let val = self.ppu_chr_rom_delay_buffer;
                     self.ppu_chr_rom_delay_buffer = mapper.read_ppu(addr);
@@ -633,30 +633,30 @@ impl Mem for Ppu {
                     mapper.read_ppu(addr)
                 }
             },
-            0x2000...0x23FF => self.vram[addr as usize - 0x2000],
-            0x2400...0x27FF => {
+            0x2000..=0x23FF => self.vram[addr as usize - 0x2000],
+            0x2400..=0x27FF => {
                 if self.horiz_mapping {
                     self.vram[addr as usize - 0x2400]
                 } else {
                     self.vram[addr as usize - 0x2000]
                 }
             },
-            0x2800...0x2BFF => {
+            0x2800..=0x2BFF => {
                 if self.horiz_mapping {
                     self.vram[addr as usize - 0x2400]
                 } else {
                     self.vram[addr as usize - 0x2800]
                 }
             },
-            0x2C00...0x2FFF => self.vram[addr as usize - 0x2800],
-            0x3000...0x3EFF => self.read(mapper, mirror_addr(0x2000...0x2FFF, 0x3000...0x3EFF, addr)),
+            0x2C00..=0x2FFF => self.vram[addr as usize - 0x2800],
+            0x3000..=0x3EFF => self.read(mapper, mirror_addr(0x2000..=0x2FFF, 0x3000..=0x3EFF, addr)),
             0x3F10 => self.read(mapper, 0x3F00),
             0x3F14 => self.read(mapper, 0x3F04),
             0x3F18 => self.read(mapper, 0x3F08),
             0x3F1C => self.read(mapper, 0x3F0C),
-            0x3F00...0x3F1F => self.palette_rame[addr as usize - 0x3F00],
-            0x3F20...0x3FFF => self.read(mapper, mirror_addr(0x3F20...0x3FFF, 0x3F00...0x3F1F, addr)),
-            0x4000...0xFFFF => self.read(mapper, mirror_addr(0x0000...0x3FFF, 0x4000...0xFFFF, addr)),
+            0x3F00..=0x3F1F => self.palette_rame[addr as usize - 0x3F00],
+            0x3F20..=0x3FFF => self.read(mapper, mirror_addr(0x3F20..=0x3FFF, 0x3F00..=0x3F1F, addr)),
+            0x4000..=0xFFFF => self.read(mapper, mirror_addr(0x0000..=0x3FFF, 0x4000..=0xFFFF, addr)),
             _ => {
                 panic!("Read from invalid ppu address {:X}", addr);
             }
@@ -665,31 +665,31 @@ impl Mem for Ppu {
 
     fn write(&mut self, mapper: &mut Box<Mapper>, addr: u16, val: u8) {
         match addr as usize {
-            0x0000...0x1FFF => mapper.write_ppu(addr, val),
-            0x2000...0x23FF => self.vram[addr as usize - 0x2000] = val,
-            0x2400...0x27FF => {
+            0x0000..=0x1FFF => mapper.write_ppu(addr, val),
+            0x2000..=0x23FF => self.vram[addr as usize - 0x2000] = val,
+            0x2400..=0x27FF => {
                 if self.horiz_mapping {
                     self.vram[addr as usize - 0x2400] = val;
                 } else {
                     self.vram[addr as usize - 0x2000] = val;
                 }
             },
-            0x2800...0x2BFF => {
+            0x2800..=0x2BFF => {
                 if self.horiz_mapping {
                     self.vram[addr as usize - 0x2400] = val;
                 } else {
                     self.vram[addr as usize - 0x2800] = val;
                 }
             },
-            0x2C00...0x2FFF => self.vram[addr as usize - 0x2800] = val,
-            0x3000...0x3EFF => self.write(mapper, mirror_addr(0x2000...0x2FFF, 0x3000...0x3EFF, addr), val),
+            0x2C00..=0x2FFF => self.vram[addr as usize - 0x2800] = val,
+            0x3000..=0x3EFF => self.write(mapper, mirror_addr(0x2000..=0x2FFF, 0x3000..=0x3EFF, addr), val),
             0x3F10 => self.write(mapper, 0x3F00, val),
             0x3F14 => self.write(mapper, 0x3F04, val),
             0x3F18 => self.write(mapper, 0x3F08, val),
             0x3F1C => self.write(mapper, 0x3F0C, val),
-            0x3F00...0x3F1F => self.palette_rame[addr as usize - 0x3F00] = val,
-            0x3F20...0x3FFF => self.write(mapper, mirror_addr(0x3F20...0x3FFF, 0x3F00...0x3F1F, addr), val),
-            0x4000...0xFFFF => self.write(mapper, mirror_addr(0x0000...0x3FFF, 0x4000...0xFFFF, addr), val),
+            0x3F00..=0x3F1F => self.palette_rame[addr as usize - 0x3F00] = val,
+            0x3F20..=0x3FFF => self.write(mapper, mirror_addr(0x3F20..=0x3FFF, 0x3F00..=0x3F1F, addr), val),
+            0x4000..=0xFFFF => self.write(mapper, mirror_addr(0x0000..=0x3FFF, 0x4000..=0xFFFF, addr), val),
             _ => {
                 panic!("Write to invalid ppu address {:X}", addr);
             }
